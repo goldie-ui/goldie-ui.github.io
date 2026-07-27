@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>집중 타이머</title>
+<style>
+  :root{
+    --bg:#0e0f1a; --card:#181a2b; --card2:#20233a; --text:#e8e9f3;
+    --muted:#9aa0c0; --accent:#7c6cff; --accent2:#ff6ca8; --green:#3ddc97;
+    --line:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    background:radial-gradient(1000px 700px at 80% -10%,#241a3d 0%,transparent 55%),var(--bg);
+    color:var(--text); min-height:100vh; padding:30px 18px 60px;
+  }
+  .back{color:var(--muted); text-decoration:none; font-size:14px}
+  .back:hover{color:var(--text)}
+  .wrap{max-width:520px; margin:0 auto}
+  h1{text-align:center; font-size:26px; font-weight:800; margin:22px 0 6px}
+  .modes{display:flex; gap:8px; justify-content:center; margin:22px 0}
+  .modes button{
+    background:var(--card); color:var(--muted); border:1px solid var(--line);
+    padding:9px 16px; border-radius:100px; cursor:pointer; font-size:14px; font-weight:600;
+    transition:all .2s;
+  }
+  .modes button.active{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .timer-card{
+    background:var(--card); border:1px solid var(--line); border-radius:26px;
+    padding:34px 24px 30px; text-align:center; margin-bottom:26px; position:relative;
+  }
+  .ring{width:230px; height:230px; margin:0 auto 8px; position:relative}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .time{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:52px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:1px;
+  }
+  .label{color:var(--muted); font-size:14px; margin-bottom:20px}
+  .controls{display:flex; gap:12px; justify-content:center}
+  .controls button{
+    border:none; cursor:pointer; font-weight:700; font-size:16px; border-radius:14px;
+    padding:14px 30px; transition:transform .15s, filter .2s;
+  }
+  .controls button:active{transform:scale(.95)}
+  .primary{background:linear-gradient(120deg,var(--accent),var(--accent2)); color:#fff}
+  .primary:hover{filter:brightness(1.1)}
+  .ghost{background:var(--card2); color:var(--text)}
+  .count{margin-top:18px; color:var(--muted); font-size:13px}
+  .count b{color:var(--green)}
+  /* tasks */
+  .tasks{background:var(--card); border:1px solid var(--line); border-radius:22px; padding:22px}
+  .tasks h2{font-size:16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center}
+  .tasks h2 small{color:var(--muted); font-weight:500; font-size:13px}
+  .add{display:flex; gap:8px; margin-bottom:14px}
+  .add input{
+    flex:1; background:var(--card2); border:1px solid var(--line); color:var(--text);
+    padding:12px 14px; border-radius:12px; font-size:15px; outline:none;
+  }
+  .add input:focus{border-color:var(--accent)}
+  .add button{background:var(--accent); color:#fff; border:none; border-radius:12px;
+    padding:0 18px; font-size:22px; cursor:pointer; font-weight:600}
+  ul{list-style:none}
+  li{display:flex; align-items:center; gap:12px; padding:11px 4px; border-bottom:1px solid var(--line)}
+  li:last-child{border-bottom:none}
+  .chk{width:22px; height:22px; border-radius:7px; border:2px solid var(--muted);
+    cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    transition:all .2s}
+  .chk.done{background:var(--green); border-color:var(--green)}
+  .chk.done::after{content:"✓"; color:#0e0f1a; font-size:14px; font-weight:900}
+  .txt{flex:1; font-size:15px}
+  li.done .txt{color:var(--muted); text-decoration:line-through}
+  .del{background:none; border:none; color:var(--muted); cursor:pointer; font-size:18px;
+    opacity:0; transition:opacity .2s}
+  li:hover .del{opacity:1}
+  .del:hover{color:var(--accent2)}
+  .empty{color:var(--muted); font-size:14px; text-align:center; padding:14px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← 플레이그라운드</a>
+  <h1>집중 타이머</h1>
+
+  <div class="modes">
+    <button data-min="25" class="active">집중 25분</button>
+    <button data-min="5">짧은 휴식 5분</button>
+    <button data-min="15">긴 휴식 15분</button>
+  </div>
+
+  <div class="timer-card">
+    <div class="ring">
+      <svg width="230" height="230">
+        <circle cx="115" cy="115" r="104" stroke="rgba(255,255,255,.08)" stroke-width="14" fill="none"/>
+        <circle id="prog" cx="115" cy="115" r="104" stroke="url(#g)" stroke-width="14" fill="none"
+          stroke-linecap="round" stroke-dasharray="653.45" stroke-dashoffset="0"/>
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#7c6cff"/><stop offset="1" stop-color="#ff6ca8"/>
+        </linearGradient></defs>
+      </svg>
+      <div class="time" id="time">25:00</div>
+    </div>
+    <div class="label" id="modeLabel">집중할 시간이에요</div>
+    <div class="controls">
+      <button class="primary" id="startBtn">시작</button>
+      <button class="ghost" id="resetBtn">초기화</button>
+    </div>
+    <div class="count">완료한 집중 세션 <b id="sessions">0</b>회</div>
+  </div>
+
+  <div class="tasks">
+    <h2>할 일 <small id="taskCount"></small></h2>
+    <div class="add">
+      <input id="taskInput" type="text" placeholder="할 일을 입력하고 Enter" maxlength="80">
+      <button id="addBtn">+</button>
+    </div>
+    <ul id="taskList"></ul>
+    <div class="empty" id="emptyMsg">아직 할 일이 없어요. 하나 추가해볼까요?</div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const CIRC = 2 * Math.PI * 104;
+
+let total = 25*60, remain = total, running = false, ticker = null, mode = 25;
+let sessions = +(localStorage.getItem('pomo_sessions')||0);
+$('#sessions').textContent = sessions;
+
+const labels = {25:'집중할 시간이에요', 5:'잠깐 숨 돌리세요', 15:'푹 쉬어가세요'};
+
+function fmt(s){
+  const m = Math.floor(s/60), sec = s%60;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+function render(){
+  $('#time').textContent = fmt(remain);
+  const frac = remain/total;
+  $('#prog').style.strokeDashoffset = CIRC * (1-frac);
+  document.title = running ? `${fmt(remain)} · 집중 타이머` : '집중 타이머';
+}
+function setMode(min, btn){
+  mode = min; total = min*60; remain = total; stop();
+  document.querySelectorAll('.modes button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  $('#modeLabel').textContent = labels[min];
+  render();
+}
+function tick(){
+  remain--;
+  if(remain <= 0){
+    remain = 0; render(); stop();
+    if(mode === 25){
+      sessions++; $('#sessions').textContent = sessions;
+      localStorage.setItem('pomo_sessions', sessions);
+    }
+    ding();
+    $('#modeLabel').textContent = '완료! 🎉';
+    return;
+  }
+  render();
+}
+function start(){
+  if(running || remain<=0) return;
+  running = true; $('#startBtn').textContent = '일시정지';
+  ticker = setInterval(tick, 1000);
+}
+function pause(){
+  running = false; $('#startBtn').textContent = '계속';
+  clearInterval(ticker);
+}
+function stop(){
+  running = false; clearInterval(ticker); $('#startBtn').textContent = '시작';
+}
+function ding(){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    [880,1320].forEach((f,i)=>{
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = f; o.type='sine'; o.connect(g); g.connect(ctx.destination);
+      const t = ctx.currentTime + i*0.18;
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.3,t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.4);
+      o.start(t); o.stop(t+0.4);
+    });
+  }catch(e){}
+}
+$('#startBtn').onclick = ()=> running ? pause() : start();
+$('#resetBtn').onclick = ()=>{ remain = total; stop(); $('#modeLabel').textContent = labels[mode]; render(); };
+document.querySelectorAll('.modes button').forEach(b=>{
+  b.onclick = ()=> setMode(+b.dataset.min, b);
+});
+document.addEventListener('keydown', e=>{
+  if(e.code==='Space' && e.target.tagName!=='INPUT'){ e.preventDefault(); running?pause():start(); }
+});
+
+/* ---- Tasks ---- */
+let tasks = JSON.parse(localStorage.getItem('pomo_tasks')||'[]');
+function saveTasks(){ localStorage.setItem('pomo_tasks', JSON.stringify(tasks)); }
+function renderTasks(){
+  const ul = $('#taskList'); ul.innerHTML='';
+  $('#emptyMsg').style.display = tasks.length ? 'none':'block';
+  const left = tasks.filter(t=>!t.done).length;
+  $('#taskCount').textContent = tasks.length ? `· 남은 ${left}개` : '';
+  tasks.forEach((t,i)=>{
+    const li = document.createElement('li');
+    if(t.done) li.classList.add('done');
+    li.innerHTML = `<div class="chk ${t.done?'done':''}"></div>
+      <div class="txt"></div><button class="del">✕</button>`;
+    li.querySelector('.txt').textContent = t.text;
+    li.querySelector('.chk').onclick = ()=>{ t.done=!t.done; saveTasks(); renderTasks(); };
+    li.querySelector('.del').onclick = ()=>{ tasks.splice(i,1); saveTasks(); renderTasks(); };
+    ul.appendChild(li);
+  });
+}
+function addTask(){
+  const inp = $('#taskInput'), v = inp.value.trim();
+  if(!v) return;
+  tasks.push({text:v, done:false}); saveTasks(); renderTasks();
+  inp.value=''; inp.focus();
+}
+$('#addBtn').onclick = addTask;
+$('#taskInput').addEventListener('keydown', e=>{ if(e.key==='Enter') addTask(); });
+
+render(); renderTasks();
+</script>
+</body>
+</html>

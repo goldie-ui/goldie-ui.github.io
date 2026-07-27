@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2048</title>
+<style>
+  :root{
+    --bg:#0e0f1a; --board:#181a2b; --cell:#20233a; --text:#e8e9f3; --muted:#9aa0c0;
+    --accent:#7c6cff; --accent2:#ff6ca8; --line:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    background:radial-gradient(900px 600px at 50% -10%,#241a3d 0%,transparent 55%),var(--bg);
+    color:var(--text); min-height:100vh; padding:26px 16px 50px;
+    display:flex; flex-direction:column; align-items:center}
+  .back{align-self:flex-start; color:var(--muted); text-decoration:none; font-size:14px}
+  .back:hover{color:var(--text)}
+  .top{width:100%; max-width:440px; display:flex; justify-content:space-between;
+    align-items:flex-end; margin:16px 0 18px}
+  h1{font-size:44px; font-weight:900; letter-spacing:-2px;
+    background:linear-gradient(120deg,#fff,#b9b0ff,#ff9ec8);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  .scores{display:flex; gap:10px}
+  .score{background:var(--board); border:1px solid var(--line); border-radius:12px;
+    padding:8px 16px; text-align:center; min-width:78px}
+  .score .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px}
+  .score .val{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
+  .bar{width:100%; max-width:440px; display:flex; justify-content:space-between;
+    align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
+  .bar p{color:var(--muted); font-size:14px}
+  .bar .actions{display:flex; gap:8px; flex-wrap:wrap; margin-left:auto}
+  .bar button{background:var(--accent); color:#fff; border:none; border-radius:10px;
+    padding:10px 16px; font-weight:700; font-size:14px; cursor:pointer; white-space:nowrap;
+    transition:filter .2s,opacity .2s}
+  .bar button:hover{filter:brightness(1.1)}
+  .bar button.ghost{background:#20233a; border:1px solid var(--line); color:var(--text)}
+  .bar button:disabled{opacity:.4; cursor:default; filter:none}
+  .board-wrap{position:relative; width:100%; max-width:440px}
+  .board{position:relative; background:var(--board); border-radius:18px; padding:12px;
+    display:grid; grid-template-columns:repeat(4,1fr); gap:12px; touch-action:none;
+    aspect-ratio:1}
+  .bg-cell{background:var(--cell); border-radius:12px}
+  .tiles{position:absolute; inset:12px}
+  .tile{position:absolute; display:flex; align-items:center; justify-content:center;
+    border-radius:12px; font-weight:800; font-variant-numeric:tabular-nums;
+    transition:transform .13s ease, opacity .13s; will-change:transform}
+  .tile.pop{animation:pop .16s ease}
+  .tile.spawn{animation:spawn .16s ease}
+  @keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.14)}100%{transform:scale(1)}}
+  @keyframes spawn{0%{transform:scale(0)}100%{transform:scale(1)}}
+  .overlay{position:absolute; inset:0; background:rgba(14,15,26,.82); border-radius:18px;
+    display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+    backdrop-filter:blur(4px); z-index:5}
+  .overlay.show{display:flex}
+  .overlay h2{font-size:38px; font-weight:900}
+  .overlay button{background:linear-gradient(120deg,var(--accent),var(--accent2)); color:#fff;
+    border:none; border-radius:12px; padding:13px 28px; font-weight:700; font-size:16px; cursor:pointer}
+  .hint{color:var(--muted); font-size:13px; margin-top:18px; text-align:center}
+</style>
+</head>
+<body>
+<a class="back" href="index.html">← 플레이그라운드</a>
+<div class="top">
+  <h1>2048</h1>
+  <div class="scores">
+    <div class="score"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+    <div class="score"><div class="lbl">최고</div><div class="val" id="best">0</div></div>
+  </div>
+</div>
+<div class="bar">
+  <p>같은 숫자를 합쳐 <b>2048</b>을 만드세요</p>
+  <div class="actions">
+    <button id="undo" class="ghost" disabled>↩ 되돌리기</button>
+    <button id="redo" class="ghost" disabled>다시하기 ↪</button>
+    <button id="newGame">새 게임</button>
+  </div>
+</div>
+<div class="board-wrap">
+  <div class="board" id="board">
+    <div class="tiles" id="tiles"></div>
+    <div class="overlay" id="overlay">
+      <h2 id="overlayText">게임 오버</h2>
+      <button id="retry">다시 하기</button>
+    </div>
+  </div>
+</div>
+<p class="hint">화살표 키 · WASD · 화면 스와이프로 이동 &nbsp;·&nbsp; Z 되돌리기 · Y 다시하기</p>
+
+<script>
+const N = 4;
+const boardEl = document.getElementById('board');
+const tilesEl = document.getElementById('tiles');
+const colors = {
+  2:['#2f3350','#e8e9f3'], 4:['#3a3f63','#e8e9f3'], 8:['#5a4bd6','#fff'],
+  16:['#7c6cff','#fff'], 32:['#9b6cff','#fff'], 64:['#c56cff','#fff'],
+  128:['#ff6ca8','#fff'], 256:['#ff86b7','#fff'], 512:['#ffa057','#fff'],
+  1024:['#ffc14d','#2a1e00'], 2048:['#ffd633','#2a1e00'], 4096:['#3ddc97','#04231a'],
+};
+let grid, score, best = +(localStorage.getItem('g2048_best')||0), idc = 0, over = false, won = false;
+document.getElementById('best').textContent = best;
+
+function empty(){ return Array.from({length:N},()=>Array(N).fill(null)); }
+function cellSize(){
+  const inner = boardEl.clientWidth - 24; // padding 12*2
+  return (inner - 12*3)/4; // gap 12
+}
+function pos(r,c){ const s = cellSize(); return {x:c*(s+12), y:r*(s+12), s}; }
+
+// build background grid
+for(let i=0;i<16;i++){ const d=document.createElement('div'); d.className='bg-cell'; boardEl.insertBefore(d, tilesEl); }
+
+function newTile(r,c,val,spawn){
+  return {id:++idc, r, c, val, el:null, spawn, merged:false};
+}
+function addRandom(){
+  const cells=[];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++) if(!grid[r][c]) cells.push([r,c]);
+  if(!cells.length) return;
+  const [r,c] = cells[Math.floor(Math.random()*cells.length)];
+  grid[r][c] = newTile(r,c, Math.random()<0.9?2:4, true);
+}
+function render(){
+  const s = cellSize();
+  const seen = new Set();
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const t = grid[r][c]; if(!t) continue;
+    seen.add(t.id);
+    if(!t.el){
+      t.el = document.createElement('div');
+      t.el.className = 'tile' + (t.spawn?' spawn':'');
+      tilesEl.appendChild(t.el);
+    }
+    const [bg,fg] = colors[t.val] || ['#3ddc97','#04231a'];
+    t.el.style.width = t.el.style.height = s+'px';
+    t.el.style.background = bg; t.el.style.color = fg;
+    t.el.style.fontSize = (t.val<100?s*0.42:t.val<1000?s*0.34:s*0.26)+'px';
+    t.el.textContent = t.val;
+    const p = pos(t.r,t.c);
+    t.el.style.transform = `translate(${p.x}px,${p.y}px)`;
+    if(t.merged){ t.el.classList.add('pop'); t.merged=false;
+      setTimeout(()=>t.el&&t.el.classList.remove('pop'),160); }
+    if(t.spawn){ t.spawn=false; setTimeout(()=>t.el&&t.el.classList.remove('spawn'),160); }
+  }
+  // remove orphan elements
+  [...tilesEl.children].forEach(el=>{ if(el._id && !seen.has(el._id)) el.remove(); });
+}
+function tagEls(){ for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const t=grid[r][c]; if(t&&t.el) t.el._id=t.id; } }
+
+function slide(line){
+  // line: array of tiles/null length N -> returns {line,gained,moved}
+  const tiles = line.filter(Boolean);
+  const out = []; let gained=0, i=0;
+  while(i<tiles.length){
+    if(i+1<tiles.length && tiles[i].val===tiles[i+1].val){
+      const merged = tiles[i];
+      merged.val *= 2; merged.merged = true; gained += merged.val;
+      tiles[i+1].dead = true; // will be removed
+      out.push(merged); i+=2;
+    } else { out.push(tiles[i]); i++; }
+  }
+  while(out.length<N) out.push(null);
+  return {line:out, gained};
+}
+let history = [], redoStack = [];
+function snapshot(){
+  const cells=[];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const t=grid[r][c]; if(t) cells.push({r,c,val:t.val}); }
+  return {cells, score, won};
+}
+function updateBtns(){
+  document.getElementById('undo').disabled = history.length===0;
+  document.getElementById('redo').disabled = redoStack.length===0;
+}
+function restore(s){
+  grid = empty();
+  [...tilesEl.children].forEach(el=>el.remove());
+  s.cells.forEach(o=>{ grid[o.r][o.c] = newTile(o.r,o.c,o.val,false); });
+  score = s.score; won = s.won; over = false;
+  document.getElementById('score').textContent = score;
+  render(); tagEls(); hideOverlay();
+}
+function undo(){
+  if(!history.length) return;
+  redoStack.push(snapshot());
+  restore(history.pop());
+  updateBtns();
+}
+function redo(){
+  if(!redoStack.length) return;
+  history.push(snapshot());
+  restore(redoStack.pop());
+  updateBtns();
+}
+
+function move(dir){
+  if(over) return;
+  // dir: 'l','r','u','d'
+  const snap = snapshot();
+  let moved=false, gained=0;
+  const read = (i,j)=>{
+    if(dir==='l') return grid[i][j];
+    if(dir==='r') return grid[i][N-1-j];
+    if(dir==='u') return grid[j][i];
+    return grid[N-1-j][i];
+  };
+  const write = (i,j,val)=>{
+    if(dir==='l') grid[i][j]=val;
+    else if(dir==='r') grid[i][N-1-j]=val;
+    else if(dir==='u') grid[j][i]=val;
+    else grid[N-1-j][i]=val;
+  };
+  const deadTiles=[];
+  for(let i=0;i<N;i++){
+    const line=[]; for(let j=0;j<N;j++) line.push(read(i,j));
+    const before = line.map(t=>t?t.id:0).join(',');
+    const {line:res, gained:g} = slide(line);
+    gained += g;
+    // collect dead (merged-away) tiles for removal after animation
+    line.forEach(t=>{ if(t&&t.dead) deadTiles.push(t); });
+    const after = res.map(t=>t?t.id:0).join(',');
+    if(before!==after) moved=true;
+    for(let j=0;j<N;j++){
+      const t=res[j];
+      if(t){ // update logical coords
+        write(i,j,t);
+      } else write(i,j,null);
+    }
+  }
+  // set coords from grid position
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const t=grid[r][c]; if(t){ t.r=r; t.c=c; } }
+  if(!moved){ deadTiles.forEach(t=>t.dead=false); return; }
+
+  history.push(snap);
+  if(history.length>50) history.shift();
+  redoStack = [];
+  updateBtns();
+
+  // animate dead tiles to their merge target then remove
+  deadTiles.forEach(t=>{
+    if(t.el){ const p=pos(t.r,t.c); t.el.style.transform=`translate(${p.x}px,${p.y}px)`;
+      const el=t.el; setTimeout(()=>el.remove(),130); }
+  });
+
+  score += gained;
+  document.getElementById('score').textContent = score;
+  if(score>best){ best=score; localStorage.setItem('g2048_best',best);
+    document.getElementById('best').textContent = best; }
+
+  render(); tagEls();
+
+  setTimeout(()=>{ addRandom(); render(); tagEls(); checkEnd(); }, 90);
+}
+function movesAvailable(){
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(!grid[r][c]) return true;
+    const v=grid[r][c].val;
+    if(c<N-1 && grid[r][c+1] && grid[r][c+1].val===v) return true;
+    if(r<N-1 && grid[r+1][c] && grid[r+1][c].val===v) return true;
+  }
+  return false;
+}
+function checkEnd(){
+  if(!won){
+    for(let r=0;r<N;r++)for(let c=0;c<N;c++) if(grid[r][c]&&grid[r][c].val>=2048){
+      won=true; showOverlay('🎉 2048 달성!', true); return;
+    }
+  }
+  if(!movesAvailable()){ over=true; showOverlay('게임 오버', false); }
+}
+function showOverlay(text, keepPlaying){
+  document.getElementById('overlayText').textContent = text;
+  document.getElementById('overlay').classList.add('show');
+  const btn = document.getElementById('retry');
+  btn.textContent = keepPlaying ? '계속 하기' : '다시 하기';
+  btn._keep = keepPlaying;
+}
+function hideOverlay(){ document.getElementById('overlay').classList.remove('show'); }
+
+function reset(){
+  grid = empty(); score=0; over=false; won=false;
+  history = []; redoStack = []; updateBtns();
+  document.getElementById('score').textContent = 0;
+  [...tilesEl.children].forEach(el=>el.remove());
+  addRandom(); addRandom(); render(); tagEls(); hideOverlay();
+}
+document.getElementById('newGame').onclick = reset;
+document.getElementById('undo').onclick = undo;
+document.getElementById('redo').onclick = redo;
+document.getElementById('retry').onclick = function(){
+  if(this._keep){ over=false; hideOverlay(); } else reset();
+};
+
+const keymap = {ArrowLeft:'l',ArrowRight:'r',ArrowUp:'u',ArrowDown:'d',
+  a:'l',d:'r',w:'u',s:'d',A:'l',D:'r',W:'u',S:'d'};
+window.addEventListener('keydown', e=>{
+  if(e.key==='z' || e.key==='Z' || (e.key==='Backspace' && e.target.tagName!=='INPUT')){
+    e.preventDefault(); undo(); return;
+  }
+  if(e.key==='y' || e.key==='Y'){ e.preventDefault(); redo(); return; }
+  const dir = keymap[e.key];
+  if(dir){ e.preventDefault(); move(dir); }
+});
+
+// touch swipe
+let sx,sy;
+boardEl.addEventListener('touchstart', e=>{ const t=e.touches[0]; sx=t.clientX; sy=t.clientY; }, {passive:true});
+boardEl.addEventListener('touchend', e=>{
+  if(sx==null) return; const t=e.changedTouches[0];
+  const dx=t.clientX-sx, dy=t.clientY-sy;
+  if(Math.max(Math.abs(dx),Math.abs(dy))<24) return;
+  if(Math.abs(dx)>Math.abs(dy)) move(dx>0?'r':'l'); else move(dy>0?'d':'u');
+  sx=sy=null;
+}, {passive:true});
+
+window.addEventListener('resize', ()=>render());
+reset();
+</script>
+</body>
+</html>
