@@ -48,6 +48,13 @@
   .screen h2{font-size:26px; font-weight:900; letter-spacing:-.02em}
   .screen p{color:var(--muted); font-size:13.5px; line-height:1.6}
 
+  .levels{display:flex; gap:6px; width:100%; max-width:280px}
+  .levels button{flex:1; background:var(--panel); color:var(--muted);
+    border:1px solid var(--line); border-radius:11px; padding:9px 0;
+    font-size:13px; font-weight:700; cursor:pointer; transition:all .18s;
+    display:flex; flex-direction:column; align-items:center; gap:2px}
+  .levels button i{font-style:normal; font-size:10px; font-weight:600; opacity:.7}
+  .levels button.on{background:var(--accent); color:#fff; border-color:var(--accent)}
   .songs{display:flex; flex-direction:column; gap:8px; width:100%; max-width:280px}
   .song{display:flex; align-items:center; gap:11px; padding:11px 13px; cursor:pointer;
     background:var(--panel); border:1px solid var(--line); border-radius:13px;
@@ -124,6 +131,7 @@
   <!-- title / song select -->
   <div class="screen" id="menu">
     <h2>🎵 곡 고르기</h2>
+    <div class="levels" id="levels"></div>
     <div class="songs" id="songList"></div>
 
     <label class="pick" id="pickWrap">
@@ -175,7 +183,7 @@
 
 <p class="hint">
   폰은 <b>레인을 손가락으로 탭</b> (여러 손가락 동시 가능) · 컴퓨터는
-  <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd> · <kbd>P</kbd> 일시정지<br>
+  <span id="keyHint"></span> · <kbd>P</kbd> 일시정지<br>
   <span style="color:#7c6cff">🎧 내 음악으로 플레이</span> — 파일은 기기 밖으로 나가지 않아요
 </p>
 
@@ -183,10 +191,40 @@
 const cv = document.getElementById('cv'), cx = cv.getContext('2d');
 const $ = s => document.querySelector(s);
 const W = cv.width, H = cv.height;
-const LANES = 4, LW = W/LANES;
+/* Difficulty is one knob for four things that all made the game hard:
+   how many lanes your thumb has to cover, how long a note is readable
+   before it lands, how forgiving the timing is, and how dense the chart is. */
+const LEVELS = {
+  easy:   {label:'쉬움',   lanes:2, speed:300, gap:0.44,
+           win:{perfect:0.075, good:0.140, ok:0.200}},
+  normal: {label:'보통',   lanes:4, speed:360, gap:0.21,
+           win:{perfect:0.058, good:0.110, ok:0.165}},
+  hard:   {label:'어려움', lanes:4, speed:440, gap:0,
+           win:{perfect:0.045, good:0.090, ok:0.135}},
+};
+let levelKey = localStorage.getItem('rhythm_level') || 'easy';
+if(!LEVELS[levelKey]) levelKey = 'easy';
+const LV = () => LEVELS[levelKey];
+
+// charts are always authored on 4 lanes, then folded down for easy mode
+const CHART_LANES = 4;
+let LANES = LV().lanes, LW = W/LANES;
+function applyLevel(){
+  LANES = LV().lanes; LW = W/LANES;
+  flashes = new Array(LANES).fill(0);
+  const kh = document.getElementById('keyHint');
+  if(kh) kh.innerHTML = (LANES===2 ? ['F','J'] : ['D','F','J','K'])
+    .map(k=>'<kbd>'+k+'</kbd>').join('');
+}
 const JUDGE_Y = H - 96;          // the hit line
-const LANE_COL = ['#5bc8ff','#3ddc97','#ffcf5b','#ff6ca8'];
-const KEYS = {d:0,f:1,j:2,k:3,D:0,F:1,J:2,K:3};
+const LANE_COL4 = ['#5bc8ff','#3ddc97','#ffcf5b','#ff6ca8'];
+const LANE_COL2 = ['#5bc8ff','#ff6ca8'];
+const LANE_COL = new Proxy({}, {get:(_,i)=> (LANES===2?LANE_COL2:LANE_COL4)[i]});
+// two-lane mode puts the keys under the index fingers instead of spreading
+// them across four
+const KEYS4 = {d:0,f:1,j:2,k:3,D:0,F:1,J:2,K:3};
+const KEYS2 = {f:0,j:1,F:0,J:1,d:0,k:1,D:0,K:1};
+const KEYS = () => LANES===2 ? KEYS2 : KEYS4;
 
 /* ---------------- audio ---------------- */
 let ac = null;
@@ -246,6 +284,33 @@ function hat(t){
   f.type='highpass'; f.frequency.value=7000;
   g.gain.setValueAtTime(0.055,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.045);
   s.connect(f); f.connect(g); g.connect(out); s.start(t); s.stop(t+0.06);
+}
+/* Tapping should sound like playing the tune, not like clicking a button.
+   Each note carries the pitch it was written from, so a hit plays that pitch;
+   an imported track has no melody to borrow, so its lanes get a pentatonic
+   chime instead, which stays consonant against whatever is playing. */
+const PAD_PITCH = [64, 67, 71, 76];      // E G B E — pentatonic-ish, no clashes
+function keyTone(m, kind){
+  const a=actx(), out=bus(); if(!a||!out) return;
+  const t=a.currentTime;
+  const vol = kind==='perfect' ? 0.15 : kind==='good' ? 0.12 : 0.09;
+  // two detuned voices give the pluck some body
+  [[0,'triangle',1], [0.06,'square',0.45]].forEach(([det,type,amp])=>{
+    const o=a.createOscillator(), g=a.createGain();
+    o.type=type; o.frequency.value = midi(m)*(1+det*0.01);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol*amp, t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+0.34);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t+0.36);
+  });
+  // a touch of sparkle on a perfect hit
+  if(kind==='perfect'){
+    const o=a.createOscillator(), g=a.createGain();
+    o.type='sine'; o.frequency.value = midi(m+24);
+    g.gain.setValueAtTime(0.05,t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+0.10);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t+0.12);
+  }
 }
 function tick(ok){                       // hit feedback, independent of the song
   const a=actx(), out=bus(); if(!a||!out) return;
@@ -312,7 +377,7 @@ function buildSong(s){
   pitches.forEach(d=>{
     const n = freq.get(d);
     const mid = cum + n/2;                       // centre of this pitch's share
-    laneMap.set(d, Math.max(0, Math.min(LANES-1, Math.floor(mid/total*LANES))));
+    laneMap.set(d, Math.max(0, Math.min(CHART_LANES-1, Math.floor(mid/total*CHART_LANES))));
     cum += n;
   });
   const laneOf = d => laneMap.get(d) ?? 0;
@@ -333,9 +398,9 @@ function buildSong(s){
       const d = bar[i];
       if(d!==null && d!==undefined){
         const m = s.root + s.key + deg(d);
-        events.push({t, f:(tt)=>tone(m,tt,0.20,'square',0.085)});
+        events.push({t, f:(tt)=>tone(m,tt,0.20,'square',0.060)});
         // lane follows pitch: low notes left, high notes right
-        notes.push({t, lane:laneOf(d), hit:false, missed:false, id:idx++});
+        notes.push({t, lane:laneOf(d), midi:m, hit:false, missed:false, id:idx++});
       }
     }
   });
@@ -462,14 +527,14 @@ function chartFromOnsets(onsets, diff, duration){
 }
 
 /* ---------------- timing ---------------- */
-const WIN = {perfect:0.045, good:0.090, ok:0.135};   // seconds, each side
+// timing windows live on the level (see LEVELS)
 const LEAD = 2.6;                                    // count-in before bar 1
 let offsetMs = +(localStorage.getItem('rhythm_offset')||0);
 
 let song=null, chart=null, startAt=0, playing=false, paused=false, pauseAt=0;
 let evIdx=0, raf=null, ended=false;
 let score=0, combo=0, best=0, tally={perfect:0,good:0,ok:0,miss:0};
-let flashes=[0,0,0,0], pops=[], judgeText=null;
+let flashes=new Array(4).fill(0), pops=[], judgeText=null;
 
 const songTime = () => (actx() ? actx().currentTime - startAt : 0);
 
@@ -490,6 +555,25 @@ function scheduleAhead(){
   }
 }
 
+// Fold a 4-lane chart onto however many lanes this level uses, then thin it
+// so notes never come faster than the level's gap. Thinning keeps the earlier
+// note of a crowded pair, which is the one that falls on the beat.
+function forLevel(notes){
+  const lv = LV();
+  const fold = CHART_LANES / lv.lanes;
+  const out = [];
+  let lastT = -99;
+  for(const n of notes){
+    // Keep the folded mapping as-is. Forcing alternation here made things
+    // harder, not easier: repeated taps on one side are the restful part of
+    // a chart, and shuffling them sent the switch rate above 90%.
+    const lane = Math.min(lv.lanes-1, Math.floor(n.lane/fold));
+    if(lv.gap && n.t - lastT < lv.gap) continue;
+    out.push({t:n.t, lane, midi:n.midi, hit:false, missed:false, id:out.length});
+    lastT = n.t;
+  }
+  return out;
+}
 function startSong(s){
   const a = actx(); if(!a) return;
   stopAudioSource();
@@ -498,9 +582,10 @@ function startSong(s){
     ? { notes: chartFromOnsets(s.onsets, s.diff, s.buffer.duration),
         events: [], len: s.buffer.duration, spb: 0.5 }
     : buildSong(s);
+  chart.notes = forLevel(chart.notes);
   evIdx=0; score=0; combo=0; best=0; ended=false;
   tally={perfect:0,good:0,ok:0,miss:0};
-  pops=[]; judgeText=null; flashes=[0,0,0,0];
+  pops=[]; judgeText=null; flashes=new Array(LANES).fill(0);
   startAt = a.currentTime + LEAD;
   playing = true; paused = false;
   lastFrame = 0;                 // so the first frame isn't read as a stall
@@ -533,20 +618,24 @@ function hitLane(lane){
     if(n.lane!==lane || n.hit || n.missed) continue;
     const dt = Math.abs(n.t - now);
     if(dt < bestDt){ bestDt = dt; bestNote = n; }
-    if(n.t - now > WIN.ok) break;      // notes are time-ordered
+    if(n.t - now > LV().win.ok) break;      // notes are time-ordered
   }
-  if(!bestNote || bestDt > WIN.ok){ tick(false); return; }
+  if(!bestNote || bestDt > LV().win.ok){ tick(false); return; }
   bestNote.hit = true;
   let kind;
-  if(bestDt <= WIN.perfect) kind='perfect';
-  else if(bestDt <= WIN.good) kind='good';
+  if(bestDt <= LV().win.perfect) kind='perfect';
+  else if(bestDt <= LV().win.good) kind='good';
   else kind='ok';
   tally[kind]++;
   combo++; best = Math.max(best, combo);
   score += (kind==='perfect'?300:kind==='good'?200:100) + Math.min(combo,50)*2;
   judgeText = {txt:{perfect:'퍼펙트!',good:'굿',ok:'오케이'}[kind], kind, life:1};
   pops.push({lane, life:1, kind});
-  tick(true);
+  // play the note you just hit — the tune comes out of your own taps
+  keyTone(bestNote.midi != null
+            ? bestNote.midi
+            : PAD_PITCH[Math.round(lane/(LANES-1)*(PAD_PITCH.length-1))] || PAD_PITCH[0],
+          kind);
   // a short buzz makes taps feel connected on a phone
   if(navigator.vibrate) navigator.vibrate(kind==='perfect'?12:8);
 }
@@ -554,7 +643,7 @@ function checkMisses(){
   const now = songTime() + offsetMs/1000;
   for(const n of chart.notes){
     if(n.hit || n.missed) continue;
-    if(now - n.t > WIN.ok){
+    if(now - n.t > LV().win.ok){
       n.missed = true; tally.miss++; combo = 0;
       judgeText = {txt:'미스', kind:'miss', life:1};
     }
@@ -602,7 +691,7 @@ function draw(){
 
   // notes
   if(chart){
-    const SPEED = 430;                   // px per second of lead time
+    const SPEED = LV().speed;            // px per second of lead time
     for(const n of chart.notes){
       if(n.hit) continue;
       const dt = n.t - t;
@@ -769,6 +858,23 @@ function togglePause(){
 }
 
 /* ---------------- song list ---------------- */
+function buildLevels(){
+  const el = $('#levels'); el.innerHTML='';
+  Object.entries(LEVELS).forEach(([k,lv])=>{
+    const b=document.createElement('button');
+    b.className = k===levelKey ? 'on' : '';
+    b.innerHTML = '<span></span><i></i>';
+    b.querySelector('span').textContent = lv.label;
+    b.querySelector('i').textContent = lv.lanes+'줄';
+    b.onclick = ()=>{
+      levelKey = k; localStorage.setItem('rhythm_level', k);
+      applyLevel(); buildLevels(); draw();
+    };
+    el.appendChild(b);
+  });
+}
+buildLevels();
+
 let picked = SONGS[0], fileSong = null;
 function allSongs(){ return fileSong ? [...SONGS, fileSong] : SONGS; }
 function buildList(){
@@ -832,7 +938,7 @@ $('#file').addEventListener('change', async (e)=>{
 addEventListener('keydown', e=>{
   if(e.repeat) return;
   if(e.key==='p'||e.key==='P'){ togglePause(); return; }
-  const l = KEYS[e.key];
+  const l = KEYS()[e.key];
   if(l!==undefined){ e.preventDefault(); hitLane(l); }
 });
 function laneFromX(clientX){
@@ -868,6 +974,8 @@ document.addEventListener('visibilitychange', ()=>{
 addEventListener('pagehide', silence);
 addEventListener('beforeunload', silence);
 
+applyLevel();
+buildLevels();
 draw();
 </script>
 </body>
