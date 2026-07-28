@@ -59,6 +59,22 @@
     padding:10px 22px; font-size:14px}
   .row{display:flex; gap:9px; flex-wrap:wrap; justify-content:center}
 
+  .pick{width:100%; max-width:280px; display:flex; align-items:center; gap:11px;
+    padding:11px 13px; background:var(--panel); border:1px dashed rgba(124,108,255,.55);
+    border-radius:13px; cursor:pointer; transition:border-color .2s, background .2s}
+  .pick:hover{border-color:var(--accent); background:rgba(124,108,255,.12)}
+  .pick .ic{font-size:20px}
+  .pick .tx{display:flex; flex-direction:column; gap:2px; text-align:left; min-width:0}
+  .pick .tx b{font-size:14px; font-weight:700}
+  .pick .tx i{font-style:normal; font-size:11px; color:var(--faint);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .analyzing{width:100%; max-width:280px; display:flex; flex-direction:column; gap:6px;
+    font-size:11.5px; color:var(--muted)}
+  .analyzing.hide{display:none}
+  .analyzing .bar{height:5px; background:#22263f; border-radius:99px; overflow:hidden}
+  .analyzing .bar i{display:block; height:100%; width:0%; border-radius:99px;
+    background:linear-gradient(90deg,var(--accent),#ff6ca8); transition:width .2s}
+
   .calib{width:100%; max-width:280px; background:var(--panel); border:1px solid var(--line);
     border-radius:13px; padding:12px 14px}
   .calib .lbl{display:flex; justify-content:space-between; font-size:12px;
@@ -101,6 +117,17 @@
   <div class="screen" id="menu">
     <h2>🎵 곡 고르기</h2>
     <div class="songs" id="songList"></div>
+
+    <label class="pick" id="pickWrap">
+      <input type="file" id="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac" hidden>
+      <span class="ic">🎧</span>
+      <span class="tx"><b>내 음악으로 플레이</b><i id="pickState">기기에 있는 노래 파일 선택</i></span>
+    </label>
+    <div class="analyzing hide" id="analyzing">
+      <div class="bar"><i id="anaBar"></i></div>
+      <span id="anaText">분석 중…</span>
+    </div>
+
     <div class="calib">
       <div class="lbl"><span>싱크 보정</span><b id="offVal">0 ms</b></div>
       <input id="offset" type="range" min="-200" max="200" step="5" value="0">
@@ -139,7 +166,9 @@
 </div>
 
 <p class="hint">
-  <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd> 또는 화면 아래를 탭 · <kbd>P</kbd> 일시정지
+  폰은 <b>레인을 손가락으로 탭</b> (여러 손가락 동시 가능) · 컴퓨터는
+  <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd> · <kbd>P</kbd> 일시정지<br>
+  <span style="color:#7c6cff">🎧 내 음악으로 플레이</span> — 파일은 기기 밖으로 나가지 않아요
 </p>
 
 <script>
@@ -306,6 +335,124 @@ function buildSong(s){
   return {events, notes, len, spb};
 }
 
+/* ------------- charting a real audio file -------------
+   Split the track into four frequency bands and find where each one suddenly
+   gets louder. Band == lane, so a kick lands on the left and a hi-hat on the
+   right: the chart follows what you actually hear rather than a fixed grid. */
+const BANDS = [
+  {lo:0,    hi:150},     // kick / low thump      -> lane 0
+  {lo:150,  hi:900},     // bass, low melody      -> lane 1
+  {lo:900,  hi:3200},    // vocal / lead          -> lane 2
+  {lo:3200, hi:20000},   // hats, cymbals, air    -> lane 3
+];
+const ANALYSIS_RATE = 22050, HOP = 256;
+
+async function bandEnvelope(buffer, lo, hi){
+  const rate = ANALYSIS_RATE;
+  const len = Math.max(rate, Math.ceil(buffer.duration*rate));
+  const oc = new OfflineAudioContext(1, len, rate);
+  const src = oc.createBufferSource(); src.buffer = buffer;
+  let node = src;
+  // cascade each filter so the bands actually separate: a single 12 dB/oct
+  // stage lets broadband hits (hi-hats especially) bleed into every band and
+  // the middle lanes end up mirroring the top one
+  for(let k=0;k<2;k++){
+    if(lo > 0){
+      const hp = oc.createBiquadFilter(); hp.type='highpass';
+      hp.frequency.value = lo; hp.Q.value = 0.7;
+      node.connect(hp); node = hp;
+    }
+    if(hi < rate/2){
+      const lp = oc.createBiquadFilter(); lp.type='lowpass';
+      lp.frequency.value = hi; lp.Q.value = 0.7;
+      node.connect(lp); node = lp;
+    }
+  }
+  node.connect(oc.destination);
+  src.start();
+  const out = await oc.startRendering();
+  const d = out.getChannelData(0);
+  const n = Math.floor(d.length/HOP);
+  const env = new Float32Array(n);
+  for(let i=0;i<n;i++){
+    let s=0;
+    for(let j=0;j<HOP;j++){ const v=d[i*HOP+j]; s += v*v; }
+    env[i] = Math.sqrt(s/HOP);
+  }
+  return {env, hopTime: HOP/rate};
+}
+// rising edges that stand out from their neighbourhood
+function detectOnsets({env, hopTime}){
+  const n = env.length, flux = new Float32Array(n);
+  for(let i=1;i<n;i++) flux[i] = Math.max(0, env[i]-env[i-1]);
+  const W = 24, out = [];
+  for(let i=1;i<n-1;i++){
+    let sum=0, cnt=0;
+    for(let j=Math.max(0,i-W); j<Math.min(n,i+W); j++){ sum += flux[j]; cnt++; }
+    const thr = (sum/cnt)*1.35 + 1e-5;
+    if(flux[i] > thr && flux[i] >= flux[i-1] && flux[i] > flux[i+1]){
+      out.push({t: i*hopTime, s: flux[i], lane: 0});
+    }
+  }
+  return out;
+}
+async function analyzeBuffer(buffer, onProgress){
+  const all = [];
+  for(let b=0;b<BANDS.length;b++){
+    onProgress((b/BANDS.length)*0.95, `${b+1}/${BANDS.length} 대역 분석 중…`);
+    const env = await bandEnvelope(buffer, BANDS[b].lo, BANDS[b].hi);
+    const found = detectOnsets(env);
+    // Scale each band against its own loudness. Without this the bass drum and
+    // the hats win every collision on raw amplitude and the two middle lanes
+    // never get a note, no matter what the song is doing.
+    const ref = found.length
+      ? [...found].map(o=>o.s).sort((x,y)=>x-y)[Math.floor(found.length*0.90)] || 1
+      : 1;
+    found.forEach(o=>{ o.lane = b; o.s = o.s/ref; all.push(o); });
+    await new Promise(r=>setTimeout(r,0));      // let the UI repaint
+  }
+  onProgress(1, '채보 만드는 중…');
+  all.sort((a,b)=>a.t-b.t);
+  return all;
+}
+// Thin the raw onsets down to a playable chart. Strongest hits win, so the
+// notes that survive are the ones that stand out in the music.
+const DENSITY = {
+  1:{lane:0.34, any:0.17},
+  2:{lane:0.21, any:0.105},
+  3:{lane:0.135,any:0.065},
+};
+function chartFromOnsets(onsets, diff, duration){
+  const g = DENSITY[diff] || DENSITY[2];
+  const byStrength = [...onsets].sort((a,b)=>b.s-a.s);
+  const kept = [];
+  // bucket accepted notes by time so each candidate only compares against its
+  // neighbours — a whole-list scan per candidate is millions of comparisons
+  const BIN = Math.max(g.lane, g.any);
+  const bins = new Map();
+  const near = t => {
+    const b = Math.floor(t/BIN), out = [];
+    for(let i=b-1;i<=b+1;i++){ const a = bins.get(i); if(a) out.push(...a); }
+    return out;
+  };
+  for(const o of byStrength){
+    if(o.t < 0.4 || o.t > duration-0.15) continue;
+    let ok = true;
+    for(const k of near(o.t)){
+      const dt = Math.abs(k.t-o.t);
+      if(dt < g.any || (k.lane===o.lane && dt < g.lane)){ ok = false; break; }
+    }
+    if(ok){
+      kept.push(o);
+      const b = Math.floor(o.t/BIN);
+      if(!bins.has(b)) bins.set(b, []);
+      bins.get(b).push(o);
+    }
+  }
+  kept.sort((a,b)=>a.t-b.t);
+  return kept.map((o,i)=>({t:o.t, lane:o.lane, hit:false, missed:false, id:i}));
+}
+
 /* ---------------- timing ---------------- */
 const WIN = {perfect:0.045, good:0.090, ok:0.135};   // seconds, each side
 const LEAD = 2.6;                                    // count-in before bar 1
@@ -337,18 +484,34 @@ function scheduleAhead(){
 
 function startSong(s){
   const a = actx(); if(!a) return;
-  song = s; chart = buildSong(s);
+  stopAudioSource();
+  song = s;
+  chart = s.file
+    ? { notes: chartFromOnsets(s.onsets, s.diff, s.buffer.duration),
+        events: [], len: s.buffer.duration, spb: 0.5 }
+    : buildSong(s);
   evIdx=0; score=0; combo=0; best=0; ended=false;
   tally={perfect:0,good:0,ok:0,miss:0};
   pops=[]; judgeText=null; flashes=[0,0,0,0];
   startAt = a.currentTime + LEAD;
   playing = true; paused = false;
   lastFrame = 0;                 // so the first frame isn't read as a stall
+  if(s.file){
+    srcNode = a.createBufferSource();
+    srcNode.buffer = s.buffer;
+    srcNode.connect(bus());
+    srcNode.start(startAt);      // same clock the notes are drawn from
+  }
   hideScreens();
   if(!raf) raf = requestAnimationFrame(loop);
 }
+let srcNode = null;
+function stopAudioSource(){
+  if(srcNode){ try{ srcNode.stop(); }catch(e){} try{ srcNode.disconnect(); }catch(e){} srcNode=null; }
+}
 function stopSong(){
   playing=false; paused=false;
+  stopAudioSource();
 }
 
 /* ---------------- judging ---------------- */
@@ -376,6 +539,8 @@ function hitLane(lane){
   judgeText = {txt:{perfect:'퍼펙트!',good:'굿',ok:'오케이'}[kind], kind, life:1};
   pops.push({lane, life:1, kind});
   tick(true);
+  // a short buzz makes taps feel connected on a phone
+  if(navigator.vibrate) navigator.vibrate(kind==='perfect'?12:8);
 }
 function checkMisses(){
   const now = songTime() + offsetMs/1000;
@@ -417,10 +582,13 @@ function draw(){
     cx.strokeStyle = LANE_COL[i]; cx.lineWidth=4;
     cx.beginPath();
     cx.moveTo(i*LW+7, JUDGE_Y); cx.lineTo((i+1)*LW-7, JUDGE_Y); cx.stroke();
-    // key pads
-    cx.globalAlpha = .10 + flashes[i]*0.5;
+    // tap pads — sized and labelled so a thumb knows where to land
+    cx.globalAlpha = .13 + flashes[i]*0.55;
     cx.fillStyle = LANE_COL[i];
-    rr(i*LW+7, JUDGE_Y+12, LW-14, 62, 12); cx.fill();
+    rr(i*LW+6, JUDGE_Y+12, LW-12, H-JUDGE_Y-24, 13); cx.fill();
+    cx.globalAlpha = .34 + flashes[i]*0.5;
+    cx.strokeStyle = LANE_COL[i]; cx.lineWidth = 1.5;
+    rr(i*LW+6, JUDGE_Y+12, LW-12, H-JUDGE_Y-24, 13); cx.stroke();
     cx.globalAlpha = 1;
   }
 
@@ -534,6 +702,7 @@ function loop(ts){
 /* ---------------- flow ---------------- */
 function finish(){
   ended = true; playing = false;
+  stopAudioSource();
   const total = tally.perfect+tally.good+tally.ok+tally.miss;
   const acc = total ? (tally.perfect + tally.good*0.75 + tally.ok*0.4)/total : 0;
   const pct = Math.round(acc*1000)/10;
@@ -564,33 +733,92 @@ function hideScreens(){
 function togglePause(){
   if(!playing || ended) return;
   if(!paused){
-    paused = true; pauseAt = songTime();
-    if(ac) ac.suspend();
+    paused = true;
+    pauseAt = songTime();          // remember exactly where we stopped
+    stopAudioSource();             // silence without suspending the context
     $('#pauseInfo').textContent = `${song.name} · 점수 ${score.toLocaleString()} · 콤보 ${combo}`;
     show('pauseScreen');
   } else {
     paused = false;
-    if(ac) ac.resume();
+    const a = actx();
+    if(a){
+      // Re-anchor the song clock to wherever we stopped. The context is left
+      // running while paused on purpose: suspend() freezes currentTime but then
+      // jumps it forward by the paused duration on resume, so an anchor taken
+      // at that moment is already stale and every later note desyncs.
+      startAt = a.currentTime - pauseAt;
+      if(song && song.file){
+        srcNode = a.createBufferSource();
+        srcNode.buffer = song.buffer;
+        srcNode.connect(bus());
+        if(pauseAt >= 0) srcNode.start(a.currentTime, Math.min(pauseAt, song.buffer.duration-0.01));
+        else srcNode.start(startAt);       // still in the count-in
+      }
+    }
+    lastFrame = 0;                 // the gap while paused isn't a stall
     hideScreens();
   }
 }
 
 /* ---------------- song list ---------------- */
-let picked = SONGS[0];
+let picked = SONGS[0], fileSong = null;
+function allSongs(){ return fileSong ? [...SONGS, fileSong] : SONGS; }
 function buildList(){
   const el = $('#songList'); el.innerHTML='';
-  SONGS.forEach(s=>{
+  allSongs().forEach(s=>{
     const d = document.createElement('div');
     d.className = 'song' + (s.id===picked.id ? ' on' : '');
     const dots = [0,1,2].map(i=>`<i class="${i<s.diff?'f':''}"></i>`).join('');
-    d.innerHTML = `<span class="nm"></span><span class="dots">${dots}</span>
-                   <span class="bpm">${s.bpm}</span>`;
-    d.querySelector('.nm').textContent = s.name;
+    d.innerHTML = `<span class="nm"></span><span class="dots" title="난이도">${dots}</span>
+                   <span class="bpm"></span>`;
+    d.querySelector('.nm').textContent = (s.file?'🎧 ':'') + s.name;
+    d.querySelector('.bpm').textContent = s.file
+      ? Math.floor(s.buffer.duration/60)+':'+String(Math.round(s.buffer.duration%60)).padStart(2,'0')
+      : s.bpm;
     d.onclick = ()=>{ picked = s; buildList(); };
+    // an imported track has no fixed chart — tapping the dots re-thins it
+    if(s.file){
+      d.querySelector('.dots').onclick = (e)=>{
+        e.stopPropagation();
+        s.diff = s.diff%3 + 1;
+        picked = s; buildList();
+      };
+    }
     el.appendChild(d);
   });
 }
 buildList();
+
+/* ---- import a track from the device (never uploaded anywhere) ---- */
+$('#file').addEventListener('change', async (e)=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const a = actx(); if(!a){ $('#pickState').textContent='이 브라우저는 오디오를 지원하지 않아요'; return; }
+  const box = $('#analyzing'), bar = $('#anaBar'), txt = $('#anaText');
+  box.classList.remove('hide');
+  const prog = (p,m)=>{ bar.style.width = Math.round(p*100)+'%'; txt.textContent = m; };
+  try{
+    prog(0.04,'파일 읽는 중…');
+    const buf = await f.arrayBuffer();
+    prog(0.10,'디코딩 중…');
+    let audio;
+    try{ audio = await a.decodeAudioData(buf); }
+    catch(_){ throw new Error('이 형식은 읽을 수 없어요 (mp3·m4a·wav를 써보세요)'); }
+    if(audio.duration < 5) throw new Error('너무 짧아요 (5초 이상 필요)');
+    const onsets = await analyzeBuffer(audio, prog);
+    if(onsets.length < 20) throw new Error('박자를 찾지 못했어요. 다른 곡을 골라보세요');
+    fileSong = {
+      id:'file:'+f.name, name:f.name.replace(/\.[^.]+$/,'').slice(0,26),
+      file:true, buffer:audio, onsets, diff:2,
+    };
+    picked = fileSong; buildList();
+    $('#pickState').textContent = `${fileSong.name} · 난이도는 점 3개를 눌러 변경`;
+    box.classList.add('hide');
+  }catch(err){
+    box.classList.add('hide');
+    $('#pickState').textContent = '실패: ' + (err.message||'이 파일은 읽을 수 없어요');
+  }
+});
 
 /* ---------------- input ---------------- */
 addEventListener('keydown', e=>{
