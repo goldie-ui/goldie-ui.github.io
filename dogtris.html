@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>캣트리스</title>
+<title>개트리스</title>
 <style>
   :root{
     --bg:#0e0f1a; --board:#141626; --cell:#1c1f33; --text:#e8e9f3; --muted:#9aa0c0;
@@ -85,13 +85,13 @@
 </head>
 <body>
 <a class="back" href="index.html">← 플레이그라운드</a>
-<h1>🐱 캣트리스</h1>
+<h1>🐶 개트리스</h1>
 <div class="game">
   <div class="board-wrap">
     <canvas id="board" width="300" height="600"></canvas>
     <div class="overlay" id="overlay">
-      <h2 id="ovTitle">🐱 캣트리스</h2>
-      <p id="ovText">고양이 블록을 쌓아 줄을 지워보세요!</p>
+      <h2 id="ovTitle">🐶 개트리스</h2>
+      <p id="ovText">강아지 블록을 쌓아 줄을 지워보세요!</p>
       <button id="startBtn">시작</button>
     </div>
   </div>
@@ -109,7 +109,7 @@
       <div class="stat"><span class="k">최고</span><span class="v" id="best">0</span></div>
       <div class="stat"><span class="k">줄</span><span class="v" id="lines">0</span></div>
       <div class="stat"><span class="k">탄</span><span class="v" id="level">1</span></div>
-      <div class="stageName" id="stageName">뒷마당</div>
+      <div class="stageName" id="stageName">앞마당</div>
       <div class="stageBar"><i id="stageBar"></i></div>
     </div>
     <button class="newBtn" id="newBtn">새 게임</button>
@@ -129,6 +129,8 @@
 </p>
 
 <script>
+// Same engine as 캣트리스 (tetris.html); what differs is the animal drawing,
+// the bark synth, the coat palette and the stage names.
 const COLS = 10, ROWS = 20, CELL = 30;
 const bc = document.getElementById('board'), bx = bc.getContext('2d');
 const nc = document.getElementById('next'), nx = nc.getContext('2d');
@@ -145,9 +147,15 @@ const SHAPES = {
   J:[[1,0,0],[1,1,1],[0,0,0]],
   L:[[0,0,1],[1,1,1],[0,0,0]],
 };
-// cat coat colors per piece
+// dog coat colors per piece
 const COLORS = {
-  I:'#5bc8ff', O:'#ffcf5b', T:'#c56cff', S:'#3ddc97', Z:'#ff6b8a', J:'#7c8cff', L:'#ff9e64'
+  I:'#f4c53f',  // 골든
+  O:'#f2e6cf',  // 크림
+  T:'#a86f4a',  // 초코
+  S:'#8fb0c9',  // 허스키
+  Z:'#e07a5f',  // 진저
+  J:'#8a7fa8',  // 블루멀
+  L:'#c76b8a',  // 푸들
 };
 const TYPES = Object.keys(SHAPES);
 
@@ -165,13 +173,13 @@ let shakeT = 0, shakeMag = 0, groupFx = new Map(), texts = [], levelFlash = 0, b
                 This is the real pressure: it punishes slow clearing.
      iRate    – chance the all-purpose I piece survives into the bag        */
 const STAGES = [
-  {n:1, name:'뒷마당',    at:0,     gravity:800, garbage:0, rise:0,     iRate:1.00, tint:'#141626', bpm:100, key:0},
-  {n:2, name:'골목길',    at:1500,  gravity:640, garbage:1, rise:0,     iRate:1.00, tint:'#151a2e', bpm:110, key:2},
-  {n:3, name:'지붕 위',   at:4000,  gravity:500, garbage:2, rise:0,     iRate:0.85, tint:'#1a1630', bpm:120, key:4},
-  {n:4, name:'달빛 정원', at:8000,  gravity:390, garbage:2, rise:26000, iRate:0.75, tint:'#101c2c', bpm:130, key:5},
-  {n:5, name:'별바다',    at:14000, gravity:300, garbage:3, rise:19000, iRate:0.65, tint:'#0f1830', bpm:140, key:7},
-  {n:6, name:'꿈나라',    at:22000, gravity:230, garbage:3, rise:14000, iRate:0.55, tint:'#1c1226', bpm:150, key:9},
-  {n:7, name:'별똥별',    at:32000, gravity:170, garbage:4, rise:10000, iRate:0.45, tint:'#241026', bpm:162, key:11},
+  {n:1, name:'앞마당',    at:0,     gravity:800, garbage:0, rise:0,     iRate:1.00, tint:'#151a16', bpm:100, key:0},
+  {n:2, name:'산책로',    at:1500,  gravity:640, garbage:1, rise:0,     iRate:1.00, tint:'#171a20', bpm:110, key:2},
+  {n:3, name:'강아지 공원',   at:4000,  gravity:500, garbage:2, rise:0,     iRate:0.85, tint:'#121a17', bpm:120, key:4},
+  {n:4, name:'풀밭 언덕', at:8000,  gravity:390, garbage:2, rise:26000, iRate:0.75, tint:'#141c18', bpm:130, key:5},
+  {n:5, name:'강변 산책',    at:14000, gravity:300, garbage:3, rise:19000, iRate:0.65, tint:'#101a22', bpm:140, key:7},
+  {n:6, name:'바닷가',    at:22000, gravity:230, garbage:3, rise:14000, iRate:0.55, tint:'#0f1a24', bpm:150, key:9},
+  {n:7, name:'달빛 들판',    at:32000, gravity:170, garbage:4, rise:10000, iRate:0.45, tint:'#151426', bpm:162, key:11},
 ];
 let stage = STAGES[0], riseTimer = 0;
 // a cleared stage waits for the player to press the button before starting
@@ -181,7 +189,7 @@ function stageFor(sc){
   for(const st of STAGES) if(sc >= st.at) s = st;
   return s;
 }
-best = +(localStorage.getItem('cattris_best')||0);
+best = +(localStorage.getItem('dogtris_best')||0);
 $('#best').textContent = best;
 
 function emptyGrid(){ return Array.from({length:ROWS}, ()=>Array(COLS).fill(null)); }
@@ -272,18 +280,18 @@ function clearLines(){
     score += [0,100,300,500,800][cleared] * stage.n;
     $('#score').textContent = score; $('#lines').textContent = lines;
     updateStage();
-    if(score>best){ best=score; localStorage.setItem('cattris_best',best); $('#best').textContent = best; }
+    if(score>best){ best=score; localStorage.setItem('dogtris_best',best); $('#best').textContent = best; }
     // a meow per cleared line, staggered into a little chorus
     for(let i=0;i<cleared;i++) meow(560 + i*130, i*0.09, 0.20);
     blip(cleared>=4?900:520);
     addShake(cleared>=4 ? 13 : 5+cleared*2);
-    // every surviving cat hops in celebration
+    // every surviving dog hops in celebration
     groupFx.forEach(fx=> fx.jp = 1);
     for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
       const c=grid[y][x];
       if(c && !groupFx.has(c.g)) groupFx.set(c.g, {sq:0, jp:1});
     }
-    const msg = ['','냐옹!','냐냐옹!','와아옹!','냐아아옹!! 🐾'][cleared];
+    const msg = ['','멍!','멍멍!','왈왈왈!','왈왈왈왈!! 🐾'][cleared];
     texts.push({x:bc.width/2, y:bc.height*0.42, str:msg, life:1, vy:-0.55,
                 color: cleared>=4 ? '#ffd85b' : '#fff', size: cleared>=4?30:23});
   }
@@ -398,7 +406,7 @@ function shapeCells(shape){
   shape.forEach((row,y)=>row.forEach((v,x)=>{ if(v) cells.push({x,y}); }));
   return cells;
 }
-// junk block — a cardboard box, clearly not a cat
+// junk block — a cardboard box, clearly not a dog
 function drawJunk(ctx, px, py, cs){
   ctx.save();
   ctx.fillStyle = '#4a4f70';
@@ -410,7 +418,7 @@ function drawJunk(ctx, px, py, cs){
   ctx.stroke();
   ctx.restore();
 }
-// ONE cat spanning all the piece's cells: connected body + head + tail
+// ONE dog spanning all the piece's cells: connected body + head + tail
 function drawCatPiece(ctx, cells, color, ox, oy, cs, alpha, showFace, wag, fx){
   if(!cells.length) return;
   const key = (x,y)=>x+','+y;
@@ -419,7 +427,7 @@ function drawCatPiece(ctx, cells, color, ox, oy, cs, alpha, showFace, wag, fx){
   const pad = cs*0.10, r = cs*0.30;
   ctx.save();
   ctx.globalAlpha = alpha;
-  // squash on landing / hop on a line clear — pivot at the cat's feet
+  // squash on landing / hop on a line clear — pivot at the dog's feet
   if(fx && (fx.sq>0 || fx.jp>0)){
     let minX=1e9,maxX=-1e9,maxY=-1e9;
     cells.forEach(c=>{ minX=Math.min(minX,c.x); maxX=Math.max(maxX,c.x); maxY=Math.max(maxY,c.y); });
@@ -482,19 +490,43 @@ function drawCatPiece(ctx, cells, color, ox, oy, cs, alpha, showFace, wag, fx){
 
   if(showFace){
     const p=P(head), s=cs;
-    // ears (same color, poke above head cell)
+    // floppy ears — hang DOWN the sides of the head, the giveaway that this
+    // is a dog and not a cat. They swing slightly with the tail wag.
+    const esw = (wag||0) * s * 0.035;
     ctx.fillStyle = color;
+    ctx.beginPath();   // left ear
+    ctx.moveTo(p.x+s*0.20, p.y+s*0.16);
+    ctx.bezierCurveTo(p.x-s*0.10+esw, p.y+s*0.20, p.x-s*0.12+esw, p.y+s*0.66,
+                      p.x+s*0.10+esw, p.y+s*0.74);
+    ctx.bezierCurveTo(p.x+s*0.22, p.y+s*0.66, p.x+s*0.24, p.y+s*0.34, p.x+s*0.20, p.y+s*0.16);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();   // right ear
+    ctx.moveTo(p.x+s*0.80, p.y+s*0.16);
+    ctx.bezierCurveTo(p.x+s*1.10+esw, p.y+s*0.20, p.x+s*1.12+esw, p.y+s*0.66,
+                      p.x+s*0.90+esw, p.y+s*0.74);
+    ctx.bezierCurveTo(p.x+s*0.78, p.y+s*0.66, p.x+s*0.76, p.y+s*0.34, p.x+s*0.80, p.y+s*0.16);
+    ctx.closePath(); ctx.fill();
+    // shade the ears so they read as hanging in front of the head
+    ctx.fillStyle = 'rgba(20,18,30,.20)';
     ctx.beginPath();
-    ctx.moveTo(p.x+s*0.14, p.y+s*0.34); ctx.lineTo(p.x+s*0.06, p.y-s*0.04); ctx.lineTo(p.x+s*0.44, p.y+s*0.18); ctx.closePath();
-    ctx.moveTo(p.x+s*0.86, p.y+s*0.34); ctx.lineTo(p.x+s*0.94, p.y-s*0.04); ctx.lineTo(p.x+s*0.56, p.y+s*0.18); ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.5)';
+    ctx.moveTo(p.x+s*0.20, p.y+s*0.16);
+    ctx.bezierCurveTo(p.x-s*0.10+esw, p.y+s*0.20, p.x-s*0.12+esw, p.y+s*0.66,
+                      p.x+s*0.10+esw, p.y+s*0.74);
+    ctx.bezierCurveTo(p.x+s*0.22, p.y+s*0.66, p.x+s*0.24, p.y+s*0.34, p.x+s*0.20, p.y+s*0.16);
+    ctx.closePath(); ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(p.x+s*0.19, p.y+s*0.26); ctx.lineTo(p.x+s*0.14, p.y+s*0.06); ctx.lineTo(p.x+s*0.36, p.y+s*0.18); ctx.closePath();
-    ctx.moveTo(p.x+s*0.81, p.y+s*0.26); ctx.lineTo(p.x+s*0.86, p.y+s*0.06); ctx.lineTo(p.x+s*0.64, p.y+s*0.18); ctx.closePath();
+    ctx.moveTo(p.x+s*0.80, p.y+s*0.16);
+    ctx.bezierCurveTo(p.x+s*1.10+esw, p.y+s*0.20, p.x+s*1.12+esw, p.y+s*0.66,
+                      p.x+s*0.90+esw, p.y+s*0.74);
+    ctx.bezierCurveTo(p.x+s*0.78, p.y+s*0.66, p.x+s*0.76, p.y+s*0.34, p.x+s*0.80, p.y+s*0.16);
+    ctx.closePath(); ctx.fill();
+    // muzzle — a pale snout the eyes sit above; cats don't have this
+    ctx.fillStyle='rgba(255,255,255,.42)';
+    ctx.beginPath();
+    ctx.ellipse(p.x+s*0.5, p.y+s*0.72, s*0.21, s*0.155, 0, 0, 7);
     ctx.fill();
     // eyes (closed crescents while blinking)
-    const ey0=p.y+s*0.52, eoff=s*0.20, er=s*0.09;
+    const ey0=p.y+s*0.46, eoff=s*0.19, er=s*0.085;
     if(fx && fx.blink){
       ctx.strokeStyle='rgba(20,18,30,.92)'; ctx.lineWidth=Math.max(1.2,s*0.045); ctx.lineCap='round';
       ctx.beginPath();
@@ -511,17 +543,32 @@ function drawCatPiece(ctx, cells, color, ox, oy, cs, alpha, showFace, wag, fx){
       ctx.beginPath(); ctx.arc(p.x+s*0.5-eoff+er*0.4, ey0-er*0.4, er*0.36,0,7); ctx.fill();
       ctx.beginPath(); ctx.arc(p.x+s*0.5+eoff+er*0.4, ey0-er*0.4, er*0.36,0,7); ctx.fill();
     }
-    // nose
-    ctx.fillStyle='#ff5c8a';
-    ctx.beginPath(); ctx.moveTo(p.x+s*0.5,p.y+s*0.68); ctx.lineTo(p.x+s*0.44,p.y+s*0.61); ctx.lineTo(p.x+s*0.56,p.y+s*0.61); ctx.closePath(); ctx.fill();
-    // whiskers
-    ctx.strokeStyle='rgba(20,18,30,.45)'; ctx.lineWidth=Math.max(1,s*0.028); ctx.lineCap='round';
+    // big round nose sitting on the muzzle
+    ctx.fillStyle='rgba(24,20,32,.92)';
     ctx.beginPath();
-    ctx.moveTo(p.x+s*0.32,p.y+s*0.66); ctx.lineTo(p.x+s*0.10,p.y+s*0.62);
-    ctx.moveTo(p.x+s*0.32,p.y+s*0.71); ctx.lineTo(p.x+s*0.10,p.y+s*0.73);
-    ctx.moveTo(p.x+s*0.68,p.y+s*0.66); ctx.lineTo(p.x+s*0.90,p.y+s*0.62);
-    ctx.moveTo(p.x+s*0.68,p.y+s*0.71); ctx.lineTo(p.x+s*0.90,p.y+s*0.73);
+    ctx.ellipse(p.x+s*0.5, p.y+s*0.645, s*0.088, s*0.070, 0, 0, 7);
+    ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.35)';
+    ctx.beginPath();
+    ctx.ellipse(p.x+s*0.472, p.y+s*0.625, s*0.028, s*0.020, 0, 0, 7);
+    ctx.fill();
+    // mouth: a short stem opening into the classic dog "w"
+    ctx.strokeStyle='rgba(24,20,32,.62)';
+    ctx.lineWidth=Math.max(1,s*0.033); ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(p.x+s*0.5, p.y+s*0.715); ctx.lineTo(p.x+s*0.5, p.y+s*0.775);
+    ctx.moveTo(p.x+s*0.5, p.y+s*0.775);
+    ctx.quadraticCurveTo(p.x+s*0.40, p.y+s*0.815, p.x+s*0.355, p.y+s*0.745);
+    ctx.moveTo(p.x+s*0.5, p.y+s*0.775);
+    ctx.quadraticCurveTo(p.x+s*0.60, p.y+s*0.815, p.x+s*0.645, p.y+s*0.745);
     ctx.stroke();
+    // tongue — lolls out while the tail is swinging hard
+    if(Math.abs(wag||0) > 0.55){
+      ctx.fillStyle='#ff7aa2';
+      ctx.beginPath();
+      ctx.ellipse(p.x+s*0.5, p.y+s*0.855, s*0.072, s*0.058, 0, 0, 7);
+      ctx.fill();
+    }
   }
   ctx.restore();
 }
@@ -537,12 +584,12 @@ function draw(){
   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
     if((x+y)%2===0){ bx.fillRect(x*CELL,y*CELL,CELL,CELL); }
   }
-  // junk terrain first, so cats always sit visually on top of it
+  // junk terrain first, so dogs always sit visually on top of it
   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
     const c = grid[y][x];
     if(c && c.junk) drawJunk(bx, x*CELL, y*CELL, CELL);
   }
-  // settled cats — each locked piece stays one cat, grouped by its id
+  // settled dogs — each locked piece stays one dog, grouped by its id
   const groups = new Map();
   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
     const c = grid[y][x]; if(!c || c.junk) continue;
@@ -552,7 +599,7 @@ function draw(){
   const sleepWag = Math.sin(wagPhase*0.7)*0.35;   // gentle idle swish
   groups.forEach((gr,gid)=>{
     const fx = groupFx.get(gid);
-    // each cat blinks on its own offset so they don't blink in unison
+    // each dog blinks on its own offset so they don't blink in unison
     const blink = ((wagPhase*0.16 + gid*0.37) % 3.4) < 0.14;
     drawCatPiece(bx, gr.cells, gr.color, 0, 0, CELL, 1, true, sleepWag,
                  {sq:fx?fx.sq:0, jp:fx?fx.jp:0, blink});
@@ -562,7 +609,7 @@ function draw(){
     let d=0; while(!collides(cur,0,d+1)) d++;
     const ghost = shapeCells(cur.shape).map(c=>({x:cur.x+c.x, y:cur.y+c.y+d}));
     drawCatPiece(bx, ghost, cur.color, 0, 0, CELL, .16, false, 0, null);
-    // the one falling cat — wags harder right after a move
+    // the one falling dog — wags harder right after a move
     const live = shapeCells(cur.shape).map(c=>({x:cur.x+c.x, y:cur.y+c.y}));
     const wag = Math.sin(wagPhase) * (0.45 + wagBoost*1.9);
     drawCatPiece(bx, live, cur.color, 0, 0, CELL, 1, true, wag,
@@ -716,7 +763,7 @@ function gameOver(){
   addShake(10);
   bgmStop();
   meow(300, 0, 0.18); meow(230, 0.22, 0.15);   // a sad descending pair
-  showOverlay('게임 오버 😿',
+  showOverlay('게임 오버 🐶',
     `${stage.n}탄 ${stage.name} · 점수 ${score} · ${lines}줄${score>=best&&score>0?' · 최고 기록! 🎉':''}`,
     '다시 하기', 'over');
 }
@@ -745,32 +792,34 @@ function actx(){
   if(_ac.state==='suspended') _ac.resume();
   return _ac;
 }
-// synthesized "meow" — pitch rises then falls while a bandpass sweeps
-// from an "ee" formant down to an "ow", which is what sells the vowel
+// synthesized bark — a dog is the opposite shape of a meow: near-instant
+// attack, pitch dropping fast, and gone in a fifth of a second. The bandpass
+// snapping shut from "wo" to "f" is what makes it read as 멍 rather than a beep.
+// `meow` keeps its name so every existing call site stays valid.
 function meow(base, delay, vol){
   const ac = actx(); if(!ac) return;
   try{
     const t0 = ac.currentTime + (delay||0), f = base||620, V = vol==null?0.20:vol;
     const o = ac.createOscillator(); o.type='sawtooth';
-    o.frequency.setValueAtTime(f*0.72, t0);
-    o.frequency.exponentialRampToValueAtTime(f*1.28, t0+0.10);
-    o.frequency.exponentialRampToValueAtTime(f*0.60, t0+0.44);
-    // vibrato gives it a living, catty waver
+    o.frequency.setValueAtTime(f*0.98, t0);
+    o.frequency.exponentialRampToValueAtTime(f*0.55, t0+0.05);
+    o.frequency.exponentialRampToValueAtTime(f*0.34, t0+0.19);
+    // a growl-rate wobble keeps it from sounding like a pure tone
     const lfo = ac.createOscillator(), lg = ac.createGain();
-    lfo.type='sine'; lfo.frequency.value = 15; lg.gain.value = f*0.04;
+    lfo.type='sine'; lfo.frequency.value = 42; lg.gain.value = f*0.07;
     lfo.connect(lg); lg.connect(o.frequency);
-    const bp = ac.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=5.5;
-    bp.frequency.setValueAtTime(1800, t0);
-    bp.frequency.exponentialRampToValueAtTime(760, t0+0.42);
-    const lp = ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=3200;
+    const bp = ac.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=3.2;
+    bp.frequency.setValueAtTime(1250, t0);
+    bp.frequency.exponentialRampToValueAtTime(420, t0+0.17);
+    const lp = ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2600;
     const g = ac.createGain();
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(V, t0+0.05);
-    g.gain.setValueAtTime(V, t0+0.24);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0+0.52);
+    g.gain.exponentialRampToValueAtTime(V*1.25, t0+0.012);   // hard attack
+    g.gain.exponentialRampToValueAtTime(V*0.42, t0+0.075);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+0.21);    // short
     o.connect(bp); bp.connect(lp); lp.connect(g); g.connect(ac.destination);
-    o.start(t0); o.stop(t0+0.54);
-    lfo.start(t0); lfo.stop(t0+0.54);
+    o.start(t0); o.stop(t0+0.23);
+    lfo.start(t0); lfo.stop(t0+0.23);
   }catch(e){}
 }
 // soft landing thud
