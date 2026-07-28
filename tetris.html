@@ -83,24 +83,34 @@
   }
 
   /* landscape phones: the width query above never fires (a phone on its side is
-     wider than 640px), so key off the short viewport instead — otherwise the
-     600px-tall well forces scrolling and the pad stays hidden */
+     wider than 640px), so key off the short viewport instead. Everything goes
+     on ONE row — pad | well | panel — because stacking title, board and pad
+     vertically cannot fit in ~375px of height. */
   @media (max-height:560px) and (orientation:landscape){
-    body{padding:10px 12px 18px}
-    h1{font-size:20px; margin:2px 0 8px}
-    .game{flex-direction:row; align-items:flex-start; gap:12px}
-    .board-wrap{width:fit-content; max-width:100%; margin:0}
-    #board{height:66vh; width:auto; max-width:100%}
-    .side{width:116px; flex-direction:column; flex-wrap:nowrap; gap:6px}
-    .side .panel{padding:7px}
-    .side .panel .lbl{margin-bottom:3px}
-    .side .panel canvas{width:100%; max-width:56px; height:auto}
-    .side .stat{padding:0}
-    .side .stat .v{font-size:15px}
-    .newBtn,.bgmBtn{padding:7px; font-size:12px}
-    .touch{display:flex; width:auto; margin-top:8px; gap:8px}
-    .touch button{padding:9px 0; min-width:52px; font-size:17px}
+    body{flex-direction:row; align-items:center; justify-content:center;
+         gap:10px; padding:8px 10px}
+    .back{position:absolute; top:6px; left:10px; font-size:12px}
+    h1{display:none}
     .hint{display:none}
+    .game{flex-direction:row; align-items:center; gap:10px}
+    .board-wrap{width:fit-content; max-width:100%; margin:0}
+    #board{height:92vh; width:auto; max-width:100%}
+    .side{width:104px; flex-direction:column; flex-wrap:nowrap; gap:5px}
+    .side .panel{padding:6px}
+    .side .panel .lbl{margin-bottom:2px; font-size:9.5px}
+    .side .panel canvas{width:100%; max-width:44px; height:auto}
+    .side .stat{padding:0}
+    .side .stat .k{font-size:10.5px}
+    .side .stat .v{font-size:14px}
+    .stageName{font-size:11px}
+    .newBtn,.bgmBtn{padding:6px; font-size:11px}
+    /* pad becomes a vertical column beside the well */
+    .touch{display:flex; flex-direction:column; width:auto; margin:0; gap:6px; order:-1}
+    .touch button{flex:0 0 auto; min-width:50px; padding:7px 0; font-size:16px}
+    .overlay h2{font-size:20px}
+    .overlay p{font-size:12px}
+    .overlay button{padding:8px 18px; font-size:13px}
+    .nextInfo{margin-top:8px; padding:7px 10px}
   }
 </style>
 </head>
