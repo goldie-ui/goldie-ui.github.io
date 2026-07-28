@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스네이크</title>
+<style>
+  :root{
+    --bg:#0e0f1a; --board:#181a2b; --cell:#20233a; --text:#e8e9f3; --muted:#9aa0c0;
+    --accent:#7c6cff; --accent2:#ff6ca8; --green:#3ddc97; --line:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    background:radial-gradient(900px 600px at 50% -10%,#241a3d 0%,transparent 55%),var(--bg);
+    color:var(--text); min-height:100vh; padding:26px 16px 50px;
+    display:flex; flex-direction:column; align-items:center}
+  .back{align-self:flex-start; color:var(--muted); text-decoration:none; font-size:14px}
+  .back:hover{color:var(--text)}
+  .top{width:100%; max-width:440px; display:flex; justify-content:space-between;
+    align-items:flex-end; margin:16px 0 18px}
+  h1{font-size:44px; font-weight:900; letter-spacing:-2px;
+    background:linear-gradient(120deg,#fff,#b9b0ff,#3ddc97);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  .scores{display:flex; gap:10px}
+  .score{background:var(--board); border:1px solid var(--line); border-radius:12px;
+    padding:8px 16px; text-align:center; min-width:78px}
+  .score .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px}
+  .score .val{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
+  .bar{width:100%; max-width:440px; display:flex; justify-content:space-between;
+    align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
+  .bar .left{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:14px}
+  .speed-sel{display:flex; gap:6px}
+  .speed-sel button{background:#20233a; color:var(--muted); border:1px solid var(--line);
+    border-radius:8px; padding:6px 12px; font-size:13px; font-weight:600; cursor:pointer;
+    transition:all .2s}
+  .speed-sel button.active{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .bar .actions{display:flex; gap:8px; margin-left:auto}
+  .bar .actions button{background:var(--accent); color:#fff; border:none; border-radius:10px;
+    padding:10px 16px; font-weight:700; font-size:14px; cursor:pointer; white-space:nowrap;
+    transition:filter .2s}
+  .bar .actions button:hover{filter:brightness(1.1)}
+  .board-wrap{position:relative; width:100%; max-width:440px}
+  canvas{width:100%; height:auto; background:var(--board); border-radius:18px;
+    display:block; touch-action:none}
+  .overlay{position:absolute; inset:0; background:rgba(14,15,26,.82); border-radius:18px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    backdrop-filter:blur(4px); z-index:5; text-align:center; padding:20px}
+  .overlay.hide{display:none}
+  .overlay h2{font-size:34px; font-weight:900}
+  .overlay p{color:var(--muted); font-size:15px}
+  .overlay button{background:linear-gradient(120deg,var(--accent),var(--accent2)); color:#fff;
+    border:none; border-radius:12px; padding:13px 30px; font-weight:700; font-size:16px; cursor:pointer}
+  .hint{color:var(--muted); font-size:13px; margin-top:18px; text-align:center}
+  /* mobile dpad */
+  .dpad{display:none; margin-top:22px; grid-template-columns:repeat(3,64px);
+    grid-template-rows:repeat(2,64px); gap:8px; justify-content:center}
+  .dpad button{background:var(--board); border:1px solid var(--line); border-radius:14px;
+    color:var(--text); font-size:24px; cursor:pointer}
+  .dpad .up{grid-column:2; grid-row:1}
+  .dpad .left{grid-column:1; grid-row:2}
+  .dpad .down{grid-column:2; grid-row:2}
+  .dpad .right{grid-column:3; grid-row:2}
+  @media (hover:none) and (pointer:coarse){ .dpad{display:grid} }
+  @media (max-width:640px){ .dpad{display:grid} }
+</style>
+</head>
+<body>
+<a class="back" href="index.html">← 플레이그라운드</a>
+<div class="top">
+  <h1>스네이크</h1>
+  <div class="scores">
+    <div class="score"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+    <div class="score"><div class="lbl">최고</div><div class="val" id="best">0</div></div>
+  </div>
+</div>
+<div class="bar">
+  <div class="left">
+    속도
+    <div class="speed-sel" id="speedSel">
+      <button data-ms="140">느림</button>
+      <button data-ms="95" class="active">보통</button>
+      <button data-ms="60">빠름</button>
+    </div>
+  </div>
+  <div class="actions">
+    <button id="restart">새 게임</button>
+  </div>
+</div>
+<div class="board-wrap">
+  <canvas id="cv" width="420" height="420"></canvas>
+  <div class="overlay" id="overlay">
+    <h2 id="ovTitle">스네이크 🐍</h2>
+    <p id="ovText">화살표 키 · WASD · 스와이프로 시작하세요</p>
+    <button id="startBtn">시작</button>
+  </div>
+</div>
+<p class="hint">화살표 · WASD · 스와이프로 조작 &nbsp;·&nbsp; Space 일시정지</p>
+<div class="dpad" id="dpad">
+  <button class="up" data-dir="u">▲</button>
+  <button class="left" data-dir="l">◀</button>
+  <button class="down" data-dir="d">▼</button>
+  <button class="right" data-dir="r">▶</button>
+</div>
+
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const GRID = 21;                       // cells per side
+const SIZE = cv.width / GRID;          // px per cell
+const $ = s => document.querySelector(s);
+
+let snake, dir, nextDir, food, score, speed = 95, alive = false, paused = false, timer = null;
+let started = false;
+let best = +(localStorage.getItem('snake_best') || 0);
+$('#best').textContent = best;
+
+const DIRS = {u:{x:0,y:-1}, d:{x:0,y:1}, l:{x:-1,y:0}, r:{x:1,y:0}};
+const OPP = {u:'d', d:'u', l:'r', r:'l'};
+
+function placeFood(){
+  let p;
+  do { p = {x:(Math.random()*GRID)|0, y:(Math.random()*GRID)|0}; }
+  while(snake.some(s => s.x===p.x && s.y===p.y));
+  food = p;
+}
+function initGame(){
+  const cx = (GRID/2)|0;
+  snake = [{x:cx-1,y:cx}, {x:cx-2,y:cx}, {x:cx-3,y:cx}];
+  dir = 'r'; nextDir = 'r'; score = 0;
+  $('#score').textContent = 0;
+  placeFood();
+  draw();
+}
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  // subtle grid dots
+  ctx.fillStyle = 'rgba(255,255,255,.03)';
+  for(let i=0;i<GRID;i++)for(let j=0;j<GRID;j++){
+    ctx.fillRect(i*SIZE+SIZE/2-1, j*SIZE+SIZE/2-1, 2, 2);
+  }
+  // food
+  const fx = food.x*SIZE, fy = food.y*SIZE;
+  ctx.fillStyle = '#ff6ca8';
+  ctx.shadowColor = '#ff6ca8'; ctx.shadowBlur = 12;
+  roundRect(fx+SIZE*0.2, fy+SIZE*0.2, SIZE*0.6, SIZE*0.6, SIZE*0.2); ctx.fill();
+  ctx.shadowBlur = 0;
+  // snake
+  snake.forEach((s,i)=>{
+    const t = i/Math.max(snake.length-1,1);
+    // gradient head->tail: purple to green
+    const c1=[124,108,255], c2=[61,220,151];
+    const r = Math.round(c1[0]+(c2[0]-c1[0])*t);
+    const g = Math.round(c1[1]+(c2[1]-c1[1])*t);
+    const b = Math.round(c1[2]+(c2[2]-c1[2])*t);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    const pad = i===0 ? 1 : 2;
+    roundRect(s.x*SIZE+pad, s.y*SIZE+pad, SIZE-pad*2, SIZE-pad*2, SIZE*0.3);
+    ctx.fill();
+    // eyes on head
+    if(i===0){
+      ctx.fillStyle = '#0e0f1a';
+      const d = DIRS[dir], cx0 = s.x*SIZE+SIZE/2, cy0 = s.y*SIZE+SIZE/2;
+      const ex = d.x*SIZE*0.18, ey = d.y*SIZE*0.18;
+      const px = -d.y*SIZE*0.2, py = d.x*SIZE*0.2; // perpendicular
+      ctx.beginPath(); ctx.arc(cx0+ex+px, cy0+ey+py, SIZE*0.09, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx0+ex-px, cy0+ey-py, SIZE*0.09, 0, 7); ctx.fill();
+    }
+  });
+}
+function step(){
+  dir = nextDir;
+  const d = DIRS[dir];
+  const head = {x: snake[0].x + d.x, y: snake[0].y + d.y};
+  // wall collision
+  if(head.x<0 || head.y<0 || head.x>=GRID || head.y>=GRID){ return gameOver(); }
+  // self collision (allow moving into current tail cell since it will move—but simpler: check body)
+  if(snake.some((s,i)=> i<snake.length-1 && s.x===head.x && s.y===head.y)){ return gameOver(); }
+  snake.unshift(head);
+  if(head.x===food.x && head.y===food.y){
+    score += 10; $('#score').textContent = score;
+    if(score>best){ best=score; localStorage.setItem('snake_best',best); $('#best').textContent = best; }
+    placeFood();
+    blip(660);
+  } else {
+    snake.pop();
+  }
+  draw();
+}
+function loop(){ if(alive && !paused) step(); }
+function start(){
+  if(alive) return;
+  initGame(); alive = true; paused = false; started = true;
+  hideOverlay();
+  clearInterval(timer); timer = setInterval(loop, speed);
+}
+function gameOver(){
+  alive = false; clearInterval(timer);
+  blip(180);
+  showOverlay('게임 오버', `점수 ${score}${score>=best&&score>0?' · 최고 기록! 🎉':''}`, '다시 하기');
+}
+function togglePause(){
+  if(!alive) return;
+  paused = !paused;
+  if(paused) showOverlay('일시정지', `점수 ${score}`, '계속하기');
+  else hideOverlay();
+}
+function showOverlay(title, text, btn){
+  $('#ovTitle').textContent = title; $('#ovText').textContent = text;
+  $('#startBtn').textContent = btn;
+  $('#overlay').classList.remove('hide');
+}
+function hideOverlay(){ $('#overlay').classList.add('hide'); }
+
+function setDir(nd){
+  if(!alive){ if(nd) start(); return; }
+  if(paused) return;
+  if(nd && nd !== OPP[dir] && nd !== dir) nextDir = nd;
+}
+function blip(freq){
+  try{
+    const ac = new (window.AudioContext||window.webkitAudioContext)();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.value = freq; o.type='square'; o.connect(g); g.connect(ac.destination);
+    g.gain.setValueAtTime(0.08, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.12);
+    o.start(); o.stop(ac.currentTime+0.12);
+  }catch(e){}
+}
+
+// ---- input ----
+const keymap = {ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r',
+  w:'u',s:'d',a:'l',d:'r',W:'u',S:'d',A:'l',D:'r'};
+window.addEventListener('keydown', e=>{
+  if(e.code==='Space'){ e.preventDefault();
+    if(!started||!alive){ start(); } else togglePause(); return; }
+  const nd = keymap[e.key];
+  if(nd){ e.preventDefault(); setDir(nd); }
+});
+$('#startBtn').onclick = ()=>{ if(paused){ togglePause(); } else start(); };
+$('#restart').onclick = ()=>{ clearInterval(timer); alive=false; start(); };
+
+// speed selector
+$('#speedSel').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  speed = +b.dataset.ms;
+  document.querySelectorAll('.speed-sel button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  if(alive && !paused){ clearInterval(timer); timer = setInterval(loop, speed); }
+});
+
+// dpad
+document.getElementById('dpad').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(b) setDir(b.dataset.dir);
+});
+
+// swipe
+let sx, sy;
+cv.addEventListener('touchstart', e=>{ const t=e.touches[0]; sx=t.clientX; sy=t.clientY; }, {passive:true});
+cv.addEventListener('touchend', e=>{
+  if(sx==null) return; const t=e.changedTouches[0];
+  const dx=t.clientX-sx, dy=t.clientY-sy;
+  if(Math.max(Math.abs(dx),Math.abs(dy))<20){ if(!alive) start(); sx=sy=null; return; }
+  if(Math.abs(dx)>Math.abs(dy)) setDir(dx>0?'r':'l'); else setDir(dy>0?'d':'u');
+  sx=sy=null;
+}, {passive:true});
+
+initGame();
+</script>
+</body>
+</html>
