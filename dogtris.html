@@ -81,6 +81,27 @@
     h1{font-size:26px; margin:6px 0 10px}
     body{padding:14px 12px 24px}
   }
+
+  /* landscape phones: the width query above never fires (a phone on its side is
+     wider than 640px), so key off the short viewport instead — otherwise the
+     600px-tall well forces scrolling and the pad stays hidden */
+  @media (max-height:560px) and (orientation:landscape){
+    body{padding:10px 12px 18px}
+    h1{font-size:20px; margin:2px 0 8px}
+    .game{flex-direction:row; align-items:flex-start; gap:12px}
+    .board-wrap{width:fit-content; max-width:100%; margin:0}
+    #board{height:66vh; width:auto; max-width:100%}
+    .side{width:116px; flex-direction:column; flex-wrap:nowrap; gap:6px}
+    .side .panel{padding:7px}
+    .side .panel .lbl{margin-bottom:3px}
+    .side .panel canvas{width:100%; max-width:56px; height:auto}
+    .side .stat{padding:0}
+    .side .stat .v{font-size:15px}
+    .newBtn,.bgmBtn{padding:7px; font-size:12px}
+    .touch{display:flex; width:auto; margin-top:8px; gap:8px}
+    .touch button{padding:9px 0; min-width:52px; font-size:17px}
+    .hint{display:none}
+  }
 </style>
 </head>
 <body>
