@@ -44,6 +44,13 @@
     padding:9px; font-weight:700; font-size:13px; cursor:pointer; transition:filter .2s}
   .bgmBtn:hover{filter:brightness(1.3)}
   .bgmBtn.off{color:var(--muted)}
+  /* 콤보가 살아 있는 동안만 뜬다. 이게 있어야 "이어서 지우면 이득"이라는
+     걸 알아챈다. 안 보여 주면 있는 줄도 모른다. */
+  .comboBox{border-top:1px solid var(--line); margin-top:4px; padding-top:5px}
+  .comboBox.hide{display:none}
+  .comboBox .k{color:#ffd85b}
+  .comboBox .v{color:#ffd85b; animation:comboPop .35s ease}
+  @keyframes comboPop{from{transform:scale(1.6)} to{transform:scale(1)}}
   .stageName{font-size:13px; font-weight:700; color:var(--accent); margin-top:2px}
   .stageBar{height:5px; background:#20233a; border-radius:99px; overflow:hidden; margin-top:7px}
   .stageBar i{display:block; height:100%; width:0%; border-radius:99px;
@@ -63,31 +70,66 @@
     border:none; border-radius:12px; padding:12px 28px; font-weight:700; font-size:16px; cursor:pointer}
   .hint{color:var(--muted); font-size:12.5px; margin-top:18px; text-align:center; line-height:1.7; max-width:420px}
   kbd{background:#20233a; border:1px solid var(--line); border-radius:5px; padding:1px 6px; font-size:11px}
+  .touchHint{display:none}
+  @media (hover:none) and (pointer:coarse){ .touchHint{display:block} .keyHint{display:none} }
+  @media (max-width:640px){ .touchHint{display:block} .keyHint{display:none} }
   /* touch controls */
-  .touch{display:none; gap:10px; margin-top:20px}
+  .touch{display:none; flex-direction:column; gap:8px; margin-top:16px; touch-action:manipulation}
+  .trow{display:flex; gap:8px}
   .touch button{flex:1; background:var(--board); border:1px solid var(--line); color:var(--text);
-    border-radius:14px; padding:16px 0; font-size:22px; cursor:pointer; min-width:52px}
+    border-radius:14px; padding:18px 0; font-size:20px; font-weight:700; cursor:pointer;
+    min-width:52px; user-select:none; -webkit-user-select:none}
+  .touch button:active{background:var(--accent); border-color:var(--accent); color:#fff}
+  .touch button.sm{font-size:14px}
+  .touch button.rotBtn{font-size:24px; background:rgba(124,108,255,.16); border-color:var(--accent)}
   /* show the on-screen pad on touch devices AND on any narrow screen, so a
      phone is never left without controls if the pointer query misreports */
   @media (hover:none) and (pointer:coarse){ .touch{display:flex} }
   @media (max-width:640px){
-    .touch{display:flex; width:100%; max-width:360px}
-    .game{flex-direction:column; align-items:center; gap:12px; width:100%}
-    /* size the well by HEIGHT so the panel and D-pad still fit on screen */
-    .board-wrap{width:fit-content; max-width:100%; margin:0 auto}
-    #board{height:44vh; width:auto; max-width:100%}
-    .side{width:100%; max-width:360px; flex-direction:row; flex-wrap:wrap;
-          align-items:flex-start; gap:8px}
-    .side .panel{flex:1 1 30%; min-width:0; padding:8px}
-    .side .panel .lbl{margin-bottom:4px}
-    .side .panel canvas{width:100%; max-width:66px; height:auto}
-    .side .stat{padding:1px 0}
-    .side .stat .v{font-size:16px}
-    .newBtn,.bgmBtn{flex:1 1 46%; padding:9px}
-    .touch button{padding:13px 0; font-size:20px}
+    /* 폰에서는 한 화면에 다 들어와야 한다. 스크롤하면서 하는 게임이 아니다.
+       세로를 셋으로 나눈다 — 위 제목 / 가운데 판(남는 만큼) / 아래 정보와 조작. */
+    body{
+      padding:6px 10px calc(env(safe-area-inset-bottom) + 6px);
+      height:100dvh; min-height:0; overflow:hidden;
+      display:flex; flex-direction:column; gap:6px;
+    }
+    h1{font-size:17px; margin:0; flex:none}
+
+    /* 판은 세로로 길쭉해서(10칸 x 20칸) 높이를 다 써도 옆이 남는다.
+       그 빈자리에 다음·홀드·점수를 세워 두면 판을 더 크게 쓸 수 있다. */
+    .game{flex:1; min-height:0; width:100%; display:flex;
+          flex-direction:row; align-items:stretch; gap:6px}
+    .board-wrap{flex:1; min-height:0; min-width:0; display:flex;
+                align-items:center; justify-content:center; margin:0}
+    #board{height:100%; width:auto; max-width:100%; max-height:100%}
+
+    .side{flex:0 0 78px; display:flex; flex-direction:column;
+          align-items:stretch; gap:5px; max-width:78px; overflow:hidden}
+    .side .panel{flex:0 0 auto; padding:5px 4px; display:flex;
+                 flex-direction:column; align-items:center; gap:2px}
+    .side .panel:nth-of-type(3){flex:0 0 auto; align-items:stretch}
+    .side .panel .lbl{margin:0; font-size:9px}
+    .side .panel canvas{width:100%; height:auto; max-width:56px}
+    .side .stat{padding:0; font-size:9.5px}
+    .side .stat .v{font-size:12px}
+    .stageName{font-size:8.5px}
+    .stageBar{height:3px}
+    .newBtn,.bgmBtn{flex:0 0 auto; padding:7px 2px; font-size:10.5px; border-radius:10px}
+
+    .touch{display:flex; width:100%; max-width:none; flex:none; margin:0; gap:6px}
+    .trow{gap:6px}
+    .touch button{padding:13px 0; font-size:18px; border-radius:12px}
+    .touch button.sm{font-size:13px}
+
     .hint{display:none}
-    h1{font-size:26px; margin:6px 0 10px}
-    body{padding:14px 12px 24px}
+  }
+
+  /* 낮은 화면(작은 폰이나 가로로 눕혔을 때)에서는 더 접는다 */
+  @media (max-width:640px) and (max-height:700px){
+    h1{display:none}
+    .side .panel canvas{height:20px}
+    .touch button{padding:10px 0; font-size:17px}
+    .newBtn,.bgmBtn{padding:5px; font-size:11px}
   }
 
   /* landscape phones: the width query above never fires (a phone on its side is
@@ -120,6 +162,49 @@
     .overlay button{padding:8px 18px; font-size:13px}
     .nextInfo{margin-top:8px; padding:7px 10px}
   }
+  /* 컴퓨터에서도 한 화면에 들어오게. 창이 낮으면 판을 줄인다.
+     canvas 안쪽 좌표(300×600)는 그대로 두고 보이는 크기만 줄이는 거라
+     게임 계산에는 아무 영향이 없다. */
+  @media (min-width:641px){
+    body{padding:14px 16px 20px}
+    h1{font-size:30px; margin:6px 0 14px}
+    #board{width:auto; height:auto; aspect-ratio:1/2;
+           max-height:calc(100vh - 150px); max-width:100%}
+  }
+  /* 노트북처럼 창이 낮으면 옆 칸도 같이 줄인다. 판만 줄여 봐야
+     옆 칸이 더 길어서 여전히 스크롤이 생긴다. */
+  @media (min-width:641px) and (max-height:860px){
+    body{padding:10px 16px 12px}
+    h1{font-size:23px; margin:0 0 9px}
+    .side{width:112px; gap:9px}
+    .panel{padding:9px}
+    .panel .lbl{margin-bottom:5px}
+    .panel canvas{width:82px; height:82px}
+    .stat .v{font-size:17px}
+    .newBtn{padding:9px; font-size:13px}
+    .bgmBtn{padding:7px; font-size:12px}
+    .keyHint{margin-top:9px; font-size:11px}
+    #board{max-height:calc(100vh - 140px)}
+  }
+  /* 더 낮은 창(노트북 세로 600 안팎). 옆 칸이 판보다 길어져 버려서
+     미리보기 칸까지 한 번 더 줄여야 한 화면에 들어온다. */
+  @media (min-width:641px) and (max-height:680px){
+    h1{font-size:19px; margin:0 0 6px}
+    /* 다음·홀드를 위아래가 아니라 나란히 놓는다. 이 한 줄이 100px 넘게
+       아낀다 — 옆 칸을 줄이는 데 이만한 게 없다. */
+    .side{width:152px; gap:6px; display:grid; grid-template-columns:1fr 1fr}
+    .side > .panel:nth-child(3), .side > .newBtn, .side > .bgmBtn{grid-column:1/-1}
+    .panel{padding:7px}
+    .panel canvas{width:52px; height:52px}
+    .panel .lbl{font-size:10px; margin-bottom:3px}
+    .stat{padding:1px 0}
+    .stat .v{font-size:15px}
+    .stat .k{font-size:11px}
+    .newBtn{padding:7px; font-size:12px}
+    .bgmBtn{padding:6px; font-size:11px}
+    .keyHint{margin-top:6px; font-size:10px}
+    #board{max-height:calc(100vh - 108px)}
+  }
 </style>
 </head>
 <body>
@@ -146,6 +231,9 @@
     <div class="panel">
       <div class="stat"><span class="k">점수</span><span class="v" id="score">0</span></div>
       <div class="stat"><span class="k">최고</span><span class="v" id="best">0</span></div>
+      <div class="stat comboBox hide" id="comboBox">
+        <span class="k">콤보</span><span class="v" id="comboVal">0</span>
+      </div>
       <div class="stat"><span class="k">줄</span><span class="v" id="lines">0</span></div>
       <div class="stat"><span class="k">탄</span><span class="v" id="level">1</span></div>
       <div class="stageName" id="stageName">뒷마당</div>
@@ -156,13 +244,22 @@
   </div>
 </div>
 <div class="touch">
-  <button data-act="left">◀</button>
-  <button data-act="rot">⟳</button>
-  <button data-act="right">▶</button>
-  <button data-act="down">▼</button>
-  <button data-act="drop">⤓</button>
+  <div class="trow">
+    <button data-act="left"  data-rep="1">◀</button>
+    <button data-act="rot"   data-rep="0" class="rotBtn">⟳</button>
+    <button data-act="right" data-rep="1">▶</button>
+  </div>
+  <div class="trow">
+    <button data-act="hold" data-rep="0" class="sm">홀드</button>
+    <button data-act="down" data-rep="1">▼</button>
+    <button data-act="drop" data-rep="0" class="sm">⤓ 낙하</button>
+  </div>
 </div>
-<p class="hint">
+<p class="hint touchHint">
+  판을 <b>옆으로 끌면</b> 따라오고 · <b>톡 치면</b> 회전 · <b>아래로 쓸면</b> 즉시 낙하<br>
+  버튼은 <b>꾹 누르면</b> 계속 움직여
+</p>
+<p class="hint keyHint">
   <kbd>←</kbd><kbd>→</kbd> 이동 · <kbd>↓</kbd> 소프트드롭 · <kbd>↑</kbd>/<kbd>X</kbd> 회전 ·
   <kbd>Space</kbd> 하드드롭 · <kbd>C</kbd> 홀드 · <kbd>P</kbd> 일시정지
 </p>
@@ -213,14 +310,38 @@ const STAGES = [
   {n:7, name:'별똥별',    at:32000, gravity:170, garbage:4, rise:10000, iRate:0.45, tint:'#241026', bpm:162, key:11},
 ];
 let stage = STAGES[0], riseTimer = 0;
-// a cleared stage waits for the player to press the button before starting
-let awaitingStage = false, pendingStage = null, overlayMode = 'start';
+// 콤보는 조각을 놓을 때마다 이어서 줄을 지운 횟수다. -1 이면 안 이어지는 중.
+// b2b 는 직전에 4줄을 만들었는지. 4줄을 연달아 내면 1.5배를 준다.
+let combo = -1, b2b = false;
+let edgeFlash = 0;     // 크게 터졌을 때 판 테두리가 번쩍이는 정도
+
+// 콤보가 살아 있는 동안만 옆 칸에 띄운다.
+function showCombo(){
+  const box = $('#comboBox');
+  if(!box) return;
+  if(combo > 0){
+    $('#comboVal').textContent = combo;
+    box.classList.remove('hide');
+    // 다시 애니메이션이 돌게 클래스를 한 번 벗겼다 씌운다
+    const v = $('#comboVal');
+    v.style.animation = 'none'; void v.offsetWidth; v.style.animation = '';
+  } else {
+    box.classList.add('hide');
+  }
+}
+
 function stageFor(sc){
   let s = STAGES[0];
   for(const st of STAGES) if(sc >= st.at) s = st;
   return s;
 }
 best = +(localStorage.getItem('cattris_best')||0);
+// 최고점은 판이 끝났을 때만 적는다. 노는 도중에 적으면 바깥 앱이 그걸
+// 5초마다 읽어다 올려서, 한 판에 순위 알림이 몇 번씩 울린다.
+// 바깥에서 게임을 닫을 때도 불러 주니(games.js), 하던 판이 날아가지도 않는다.
+window.saveBest = function(){ if(best>0) localStorage.setItem('cattris_best', best); };
+addEventListener('pagehide', window.saveBest);
+
 $('#best').textContent = best;
 
 function emptyGrid(){ return Array.from({length:ROWS}, ()=>Array(COLS).fill(null)); }
@@ -244,8 +365,24 @@ function rotateCW(m){
   for(let y=0;y<n;y++)for(let x=0;x<n;x++) r[x][n-1-y]=m[y][x];
   return r;
 }
+// 조각 칸에 2 가 들어 있으면 그 칸이 츄르다. 회전은 행렬을 통째로
+// 돌리니 값이 그대로 따라 돌고, 부딪힘 판정은 0 이냐 아니냐만 보므로
+// 1 이든 2 든 똑같이 막힌 칸으로 센다.
+//
+// 원래는 츄르가 방해줄에만 섞였다. 그런데 방해줄은 2탄(1500점)부터
+// 나와서, 몇 판 해서는 츄르를 구경도 못 한다. 조각에도 섞어야 처음
+// 1분 안에 보인다.
+const CHUR_RATE = 0.22;
 function spawn(type){
   const shape = SHAPES[type].map(row=>row.slice());
+  if(Math.random() < CHUR_RATE){
+    const spots = [];
+    shape.forEach((row,y)=>row.forEach((v,x)=>{ if(v) spots.push([y,x]); }));
+    if(spots.length){
+      const [y,x] = spots[(Math.random()*spots.length)|0];
+      shape[y][x] = 2;
+    }
+  }
   const w = shape[0].length;
   return { type, shape, color:COLORS[type], x: ((COLS - w)/2)|0, y: type==='I'? -1 : (type==='O'?0:-1) };
 }
@@ -262,7 +399,8 @@ function collides(piece, ox, oy, shape){
 function lockPiece(){
   const g = ++groupSeq;   // this piece keeps its identity as one cat on the board
   cur.shape.forEach((row,y)=>row.forEach((v,x)=>{
-    if(v){ const gy=cur.y+y, gx=cur.x+x; if(gy>=0) grid[gy][gx]={color:cur.color, g}; }
+    if(v){ const gy=cur.y+y, gx=cur.x+x;
+      if(gy>=0) grid[gy][gx]={color:cur.color, g, chur: v===2}; }
   }));
   groupFx.set(g, {sq:1, jp:0});      // squash-and-settle on landing
   thud(); addShake(3);
@@ -299,19 +437,50 @@ function burstRow(y){
   flashes.push({y, life:1});
 }
 function clearLines(){
-  let cleared=0;
+  let cleared=0, churs=0, lowY=0;
   for(let y=ROWS-1;y>=0;y--){
     if(grid[y].every(c=>c)){
+      churs += grid[y].filter(c=>c && c.chur).length;
+      if(!cleared) lowY = y;            // 점수를 띄울 자리
       burstRow(y);
       grid.splice(y,1); grid.unshift(Array(COLS).fill(null)); cleared++; y++;
     }
   }
-  if(cleared){
+  if(!cleared){ combo = -1; showCombo(); return; }   // 줄을 못 지우면 콤보가 끊긴다
+  {
     lines += cleared;
-    score += [0,100,300,500,800][cleared] * stage.n;
+
+    // 점수 — 여기가 실력이 드러나는 곳이다.
+    //
+    // 예전엔 지운 줄 수만 봤다. 그러면 오래 버틴 사람이 곧 잘한 사람이
+    // 되어서, 순위표가 실력표가 아니라 인내심표가 된다. 세 가지를 더한다.
+    //   콤보    — 조각을 놓을 때마다 연달아 지우면 쌓인다
+    //   백투백  — 4줄을 연달아 만들면 1.5배
+    //   올클리어— 판을 싹 비우면 크게 준다. 한 판에 한 번 나올까 말까다
+    const base = [0,100,300,500,800][cleared];
+    const hard = cleared === 4;
+    let gain = (hard && b2b) ? Math.round(base * 1.5) : base;
+    combo++;
+    if(combo > 0) gain += 50 * combo;
+    const allClear = grid.every(r => r.every(c => !c));
+    if(allClear) gain += 2000;
+    gain *= stage.n;
+    if(churs) gain += 300 * churs * stage.n;   // 츄르 칸은 덤
+    b2b = hard;
+    score += gain;
+    showCombo();
+
+    // 번 점수를 지운 자리에서 띄운다. 숫자가 조용히 오르기만 하면
+    // 콤보를 이어 봐야 뭐가 좋은지 체감이 안 된다.
+    texts.push({x:bc.width/2, y:(lowY+0.5)*CELL, str:'+'+gain.toLocaleString('ko-KR'),
+                life:1, vy:-0.7, color: gain>=1000 ? '#ffd85b' : '#cfe9ff',
+                size: gain>=1000 ? 26 : 20});
+    // 크게 터졌을 때는 판 테두리도 번쩍인다.
+    if(hard || allClear) edgeFlash = 1;
+
     $('#score').textContent = score; $('#lines').textContent = lines;
     updateStage();
-    if(score>best){ best=score; localStorage.setItem('cattris_best',best); $('#best').textContent = best; }
+    if(score>best){ best=score; $('#best').textContent = best; }
     // a meow per cleared line, staggered into a little chorus
     for(let i=0;i<cleared;i++) meow(560 + i*130, i*0.09, 0.20);
     blip(cleared>=4?900:520);
@@ -325,6 +494,30 @@ function clearLines(){
     const msg = ['','냐옹!','냐냐옹!','와아옹!','냐아아옹!! 🐾'][cleared];
     texts.push({x:bc.width/2, y:bc.height*0.42, str:msg, life:1, vy:-0.55,
                 color: cleared>=4 ? '#ffd85b' : '#fff', size: cleared>=4?30:23});
+
+    // 무슨 일이 일어났는지 그 자리에서 보여 준다. 점수만 조용히 오르면
+    // 콤보를 이어 가는 재미를 못 느낀다.
+    let row = 0;
+    const say = (str, color, size) => {
+      texts.push({x:bc.width/2, y:bc.height*0.42 + 34 + (row++)*26, str, life:1,
+                  vy:-0.42, color, size});
+    };
+    if(churs) { say(`츄르 ${churs}개! +${300*churs*stage.n}`, '#ffb38a', 19); churMeow(); }
+    if(hard && b2b && cleared===4) say('백투백! 1.5배', '#8fd9ff', 20);
+    if(combo > 0){
+      say(`${combo}콤보! +${50*combo*stage.n}`, combo>=4 ? '#ffd85b' : '#9fe8c0', combo>=4?24:19);
+      comboBlip(combo);
+    }
+    if(allClear){
+      say('올클리어!! 🐾', '#ffd85b', 30);
+      addShake(20); fanfare();
+      for(let i=0;i<26;i++){
+        const a = Math.random()*6.283, sp = 2 + Math.random()*4;
+        particles.push({x:bc.width/2, y:bc.height*0.5,
+          vx:Math.cos(a)*sp*CELL*0.5, vy:Math.sin(a)*sp*CELL*0.5,
+          life:1, size:CELL*0.18, color:'#ffd85b', rot:0, vr:0.3, star:true});
+      }
+    }
   }
 }
 function addShake(mag){ shakeMag = Math.max(shakeMag, mag); shakeT = 1; }
@@ -390,8 +583,17 @@ function addJunkRow(silent){
   const holes = new Set();
   holes.add((Math.random()*COLS)|0);
   if(Math.random()<0.35) holes.add((Math.random()*COLS)|0);
+  // 방해줄에 가끔 츄르가 하나 섞인다. 그 줄을 지우면 덤을 준다.
+  // 성가신 줄이 갑자기 노려 볼 만한 줄이 된다.
+  let churAt = -1;
+  if(Math.random() < 0.42){
+    const free = [];
+    for(let x=0;x<COLS;x++) if(!holes.has(x)) free.push(x);
+    if(free.length) churAt = free[(Math.random()*free.length)|0];
+  }
   const row = Array.from({length:COLS}, (_,x)=>
-    holes.has(x) ? null : {color:'#4a4f70', junk:true});
+    holes.has(x) ? null : {color: x===churAt ? '#c97a55' : '#4a4f70',
+                           junk:true, chur: x===churAt});
   grid.shift(); grid.push(row);
   // the stack rose under the falling piece — lift it so it never overlaps
   if(cur && !over){ let guard=0; while(collides(cur,0,0) && cur.y>-2 && guard++<ROWS) cur.y--; }
@@ -436,6 +638,22 @@ function shapeCells(shape){
   const cells=[];
   shape.forEach((row,y)=>row.forEach((v,x)=>{ if(v) cells.push({x,y}); }));
   return cells;
+}
+// 방해줄에 섞인 츄르. 상자와 확실히 달라 보여야 노리게 된다.
+function drawChur(ctx, px, py, cs){
+  ctx.save();
+  ctx.translate(px+cs/2, py+cs/2);
+  const g = ctx.createLinearGradient(-cs*0.2,0,cs*0.2,0);
+  g.addColorStop(0,'#ffd7a8'); g.addColorStop(1,'#ff8f6b');
+  ctx.fillStyle = g;
+  ctx.strokeStyle = '#fff0dd'; ctx.lineWidth = Math.max(1, cs*0.055);
+  ctx.rotate(-0.5);
+  rr(ctx, -cs*0.13, -cs*0.33, cs*0.26, cs*0.66, cs*0.13);
+  ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.65)';
+  ctx.lineWidth = Math.max(1, cs*0.06);
+  ctx.beginPath(); ctx.moveTo(-cs*0.04,-cs*0.19); ctx.lineTo(-cs*0.04,cs*0.19); ctx.stroke();
+  ctx.restore();
 }
 // junk block — a cardboard box, clearly not a cat
 function drawJunk(ctx, px, py, cs){
@@ -579,7 +797,8 @@ function draw(){
   // junk terrain first, so cats always sit visually on top of it
   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
     const c = grid[y][x];
-    if(c && c.junk) drawJunk(bx, x*CELL, y*CELL, CELL);
+    if(c && c.junk) c.chur ? drawChur(bx, x*CELL, y*CELL, CELL)
+                           : drawJunk(bx, x*CELL, y*CELL, CELL);
   }
   // settled cats — each locked piece stays one cat, grouped by its id
   const groups = new Map();
@@ -607,11 +826,35 @@ function draw(){
     drawCatPiece(bx, live, cur.color, 0, 0, CELL, 1, true, wag,
                  {sq:0, jp:0, blink: (wagPhase*0.16 % 3.4) < 0.12});
   }
+  // 츄르는 고양이 위에 얹어 그린다. 떨어지는 조각이 물고 오는 것도,
+  // 이미 쌓인 것도 같이. 방해줄 츄르는 위에서 이미 그렸다.
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const c = grid[y][x];
+    if(c && c.chur && !c.junk) drawChur(bx, x*CELL, y*CELL, CELL);
+  }
+  if(cur && !over){
+    cur.shape.forEach((row,y)=>row.forEach((v,x)=>{
+      if(v===2){ const gy=cur.y+y; if(gy>=0) drawChur(bx, (cur.x+x)*CELL, gy*CELL, CELL); }
+    }));
+  }
   drawFx();
   bx.restore();
   drawTexts();
 }
 function drawTexts(){
+  // 4줄이나 올클리어처럼 크게 터졌을 때, 판 안쪽 테두리가 금빛으로 번쩍인다.
+  if(edgeFlash>0){
+    bx.save();
+    const w = 3 + edgeFlash*13;
+    const g = bx.createLinearGradient(0,0,0,bc.height);
+    g.addColorStop(0, `rgba(255,216,91,${edgeFlash*0.85})`);
+    g.addColorStop(0.5, `rgba(255,140,190,${edgeFlash*0.55})`);
+    g.addColorStop(1, `rgba(255,216,91,${edgeFlash*0.85})`);
+    bx.strokeStyle = g; bx.lineWidth = w;
+    bx.strokeRect(w/2, w/2, bc.width-w, bc.height-w);
+    bx.restore();
+    edgeFlash = Math.max(0, edgeFlash - 0.045);
+  }
   if(levelFlash>0){
     bx.save();
     bx.globalAlpha = levelFlash*0.35;
@@ -735,6 +978,7 @@ function tick(t){
 function startGame(){
   grid = emptyGrid();
   score=0; lines=0; over=false; paused=false; started=true;
+  combo=-1; b2b=false; edgeFlash=0; showCombo();
   awaitingStage=false; pendingStage=null;
   applyStage(STAGES[0]);
   holdType=null; canHold=true; bag=[];
@@ -751,12 +995,14 @@ function startGame(){
 }
 function gameOver(){
   over=true;
+  window.saveBest();
   awaitingStage=false; pendingStage=null;
   addShake(10);
   bgmStop();
   meow(300, 0, 0.18); meow(230, 0.22, 0.15);   // a sad descending pair
+  const mark = (score>=best && score>0) ? ' · 최고 기록! 🎉' : '';
   showOverlay('게임 오버 😿',
-    `${stage.n}탄 ${stage.name} · 점수 ${score} · ${lines}줄${score>=best&&score>0?' · 최고 기록! 🎉':''}`,
+    `${stage.n}탄 ${stage.name} · 점수 ${score} · ${lines}줄${mark}`,
     '다시 하기', 'over');
 }
 function togglePause(){
@@ -825,6 +1071,42 @@ function thud(){
     g.gain.exponentialRampToValueAtTime(0.0001, t0+0.16);
     o.connect(g); g.connect(ac.destination);
     o.start(t0); o.stop(t0+0.18);
+  }catch(e){}
+}
+// 콤보가 이어질수록 음이 한 칸씩 올라간다. 귀로 세어진다.
+function comboBlip(n){
+  const ac = actx(); if(!ac) return;
+  try{
+    const t0 = ac.currentTime;
+    const f = 523.25 * Math.pow(2, Math.min(n,12)*2/12);
+    for(const [ff,dl,v] of [[f,0,0.06],[f*1.5,0.04,0.035]]){
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.type='triangle'; o.frequency.value=ff;
+      g.gain.setValueAtTime(0.0001,t0+dl);
+      g.gain.exponentialRampToValueAtTime(v,t0+dl+0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+dl+0.22);
+      o.connect(g); g.connect(ac.destination);
+      o.start(t0+dl); o.stop(t0+dl+0.24);
+    }
+  }catch(e){}
+}
+// 츄르를 지웠을 때. 신난 야옹 두 번.
+function churMeow(){ meow(720, 0, 0.22); meow(880, 0.16, 0.18); }
+// 올클리어. 한 판에 한 번 나올까 말까라 크게 울려 준다.
+function fanfare(){
+  const ac = actx(); if(!ac) return;
+  try{
+    const t0 = ac.currentTime;
+    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f,i)=>{
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.type='square'; o.frequency.value=f;
+      const t=t0+i*0.075;
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.07,t+0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.42);
+      o.connect(g); g.connect(ac.destination);
+      o.start(t); o.stop(t+0.44);
+    });
   }catch(e){}
 }
 function blip(freq){
@@ -918,7 +1200,15 @@ window.addEventListener('pagehide', silenceAll);
 window.addEventListener('beforeunload', silenceAll);
 
 /* ---------- input ---------- */
+// 게임이 쓰는 키는 브라우저가 하던 일을 못 하게 막는다. 안 막으면
+// 방향키와 스페이스가 페이지를 같이 굴려서, 컴퓨터로 하면 조각을 옮길
+// 때마다 화면이 따라 흔들린다. 스페이스만 막고 있었던 게 문제였다.
+const GAME_KEYS = new Set([
+  'ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Spacebar',
+  'PageUp','PageDown','Home','End',
+]);
 window.addEventListener('keydown', e=>{
+  if(GAME_KEYS.has(e.key) || e.code==='Space') e.preventDefault();
   // between stages, the only thing any key does is start the next one
   if(awaitingStage){
     if(e.code==='Space'||e.key==='Enter'){ e.preventDefault(); enterNextStage(); }
@@ -948,30 +1238,101 @@ $('#newBtn').onclick = startGame;
 $('#bgmBtn').onclick = bgmToggle;
 
 // touch buttons
-document.querySelector('.touch').addEventListener('click', e=>{
-  const b=e.target.closest('button'); if(!b) return;
-  if(awaitingStage){ enterNextStage(); return; }
-  if(!started||over){ startGame(); return; }
-  if(paused) return;
-  const a=b.dataset.act;
-  if(a==='left') move(-1); else if(a==='right') move(1);
-  else if(a==='down') softDrop(); else if(a==='rot') rotate(); else if(a==='drop'){ hardDrop(); return; }
+// ---------------------------------------------------------------
+// 폰 조작
+// ---------------------------------------------------------------
+// 탭 한 번에 한 칸씩만 가면 왼쪽 끝까지 다섯 번을 눌러야 한다.
+// 그래서 ◀ ▶ ▼ 는 꾹 누르고 있으면 계속 간다. 처음 한 번 가고
+// 잠깐 뜸을 들인 뒤(DAS) 빠르게 반복한다 — 테트리스가 원래 그렇다.
+const HOLD_DELAY = 170;   // 누르고 이만큼 뒤부터 반복
+const HOLD_RATE  = 55;    // 반복 간격
+
+function doAct(a){
+  if(awaitingStage){ enterNextStage(); return false; }
+  if(!started||over){ startGame(); return false; }
+  if(paused) return false;
+  if(a==='left') move(-1);
+  else if(a==='right') move(1);
+  else if(a==='down') softDrop();
+  else if(a==='rot') rotate();
+  else if(a==='hold') hold();
+  else if(a==='drop'){ hardDrop(); draw(); return false; }
   draw();
+  return true;
+}
+
+document.querySelectorAll('.touch button').forEach(b=>{
+  const a = b.dataset.act;
+  const repeatable = b.dataset.rep === '1';
+  let delay=null, timer=null;
+
+  const stop = ()=>{ clearTimeout(delay); clearInterval(timer); delay=timer=null; };
+
+  b.addEventListener('pointerdown', e=>{
+    e.preventDefault();
+    // 손가락이 버튼 밖으로 나가도 놓을 때까지 이 버튼이 잡고 있게
+    if(b.setPointerCapture) { try{ b.setPointerCapture(e.pointerId); }catch{} }
+    const ok = doAct(a);
+    if(!ok || !repeatable) return;
+    delay = setTimeout(()=>{ timer = setInterval(()=>doAct(a), HOLD_RATE); }, HOLD_DELAY);
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>b.addEventListener(ev, stop));
 });
-// swipe on board
-let sx,sy,st;
-bc.addEventListener('touchstart',e=>{const t=e.touches[0];sx=t.clientX;sy=t.clientY;st=Date.now();},{passive:true});
-bc.addEventListener('touchend',e=>{
-  if(sx==null)return; const t=e.changedTouches[0];
-  const dx=t.clientX-sx, dy=t.clientY-sy, adx=Math.abs(dx), ady=Math.abs(dy);
+
+// ---------------------------------------------------------------
+// 판 위에서 손가락으로
+// ---------------------------------------------------------------
+// 옆으로 끌면 끈 만큼 따라온다. 한 칸 너비를 지날 때마다 한 칸씩.
+// 아래로 쓸면 빨리 내리고, 톡 치면 회전한다.
+let sx=null, sy=null, st=0, baseX=0;
+
+bc.addEventListener('touchstart', e=>{
+  const t=e.touches[0];
+  sx=t.clientX; sy=t.clientY; st=Date.now();
+  baseX = cur ? cur.x : 0;   // 손을 댄 순간의 조각 자리를 기준으로 삼는다
+}, {passive:true});
+
+bc.addEventListener('touchmove', e=>{
+  if(sx===null || !started || over || paused || awaitingStage) return;
+  const t=e.touches[0];
+  const dx=t.clientX-sx, dy=t.clientY-sy;
+  // 화면에 그려진 한 칸의 실제 너비. 판을 줄여 그려도 손끝과 맞게.
+  const cellW = bc.getBoundingClientRect().width / COLS;
+
+  if(Math.abs(dx) > Math.abs(dy)){
+    // 손끝이 간 만큼의 자리로 조각을 데려간다. 벽에 막히면 거기서 멈추되,
+    // 기준은 손끝이라 반대로 끌면 곧바로 따라온다.
+    const want = baseX + Math.trunc(dx / cellW);
+    let guard = COLS + 2;
+    while(cur.x < want && guard-- > 0){ const b=cur.x; move(1);  if(cur.x===b) break; }
+    while(cur.x > want && guard-- > 0){ const b=cur.x; move(-1); if(cur.x===b) break; }
+    // 벽에 막혀 못 간 만큼은 없던 일로 하고 손끝 기준을 다시 잡는다.
+    // 안 그러면 벽에 박은 뒤 반대로 끌 때 그만큼 헛돌아 뻑뻑하다.
+    if(cur.x !== want){ baseX = cur.x; sx = t.clientX; }
+    draw();
+  } else if(dy > cellW*1.2){
+    softDrop(); draw();
+    sy = t.clientY;   // 계속 끌면 계속 내려간다
+    baseX = cur.x;    // 내려간 뒤에도 좌우 기준을 다시 잡는다
+  }
+}, {passive:true});
+
+bc.addEventListener('touchend', e=>{
+  if(sx===null) return;
+  const t=e.changedTouches[0];
+  const dx=t.clientX-sx, dy=t.clientY-sy;
+  const adx=Math.abs(dx), ady=Math.abs(dy), dt=Date.now()-st;
+
   if(awaitingStage){ enterNextStage(); sx=null; return; }
   if(!started||over){ startGame(); sx=null; return; }
-  if(paused){sx=null;return;}
-  if(adx<16&&ady<16){ rotate(); }                       // tap = rotate
-  else if(ady>adx){ if(dy>0){ if(ady>CELL*4) hardDrop(); else softDrop(); } }
-  else { move(dx>0?1:-1); }
+  if(paused){ sx=null; return; }
+
+  if(adx<14 && ady<14 && dt<300){ rotate(); }              // 톡 치면 회전
+  else if(ady>adx && dy>0 && ady>cellHeight()*4 && dt<320){ hardDrop(); }  // 아래로 확 쓸면 즉시 낙하
   draw(); sx=null;
-},{passive:true});
+}, {passive:true});
+
+function cellHeight(){ return bc.getBoundingClientRect().height / ROWS; }
 
 // initial render + keep the animation loop alive for idle fx
 grid = emptyGrid(); score=0; lines=0; applyStage(STAGES[0]);
