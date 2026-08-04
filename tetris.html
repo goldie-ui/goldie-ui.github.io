@@ -330,6 +330,11 @@ function showCombo(){
   }
 }
 
+// 단계를 깬 뒤에는 사람이 단추를 누를 때까지 기다린다.
+// overlayMode 는 지금 떠 있는 덮개가 뭔지 — 시작인지, 단계 사이인지,
+// 일시정지인지, 게임 오버인지. 시작 단추가 무슨 일을 할지가 여기서 갈린다.
+let awaitingStage = false, pendingStage = null, overlayMode = 'start';
+
 function stageFor(sc){
   let s = STAGES[0];
   for(const st of STAGES) if(sc >= st.at) s = st;
