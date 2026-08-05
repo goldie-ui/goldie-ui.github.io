@@ -34,11 +34,6 @@
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
   .sub{color:var(--faint); font-size:12px; margin-bottom:12px}
 
-  .themes{display:flex; gap:6px; margin-bottom:11px}
-  .themes button{background:var(--jar); color:var(--muted); border:1px solid var(--line);
-    border-radius:99px; padding:6px 15px; font-size:12.5px; font-weight:700; cursor:pointer;
-    transition:all .18s}
-  .themes button.on{background:var(--accent); color:#2a1500; border-color:var(--accent)}
   .hud{width:100%; max-width:380px; display:flex; align-items:center; gap:10px; margin-bottom:10px}
   .score{flex:1; background:var(--jar); border:1px solid var(--line); border-radius:13px;
     padding:8px 13px}
@@ -102,7 +97,6 @@
 <a class="back" href="index.html">← 골디 게임</a>
 <h1 id="title">🐱 냥탑</h1>
 <div class="sub" id="sub">같은 것끼리 합쳐 탑을 쌓으세요</div>
-<div class="themes" id="themes"></div>
 
 <div class="hud">
   <div class="score"><div class="k">점수</div><div class="v" id="score">0</div></div>
@@ -135,10 +129,9 @@ const nx=document.getElementById('next'), nctx=nx.getContext('2d');
 const $=s=>document.querySelector(s);
 const W=cv.width, H=cv.height;
 
-/* ---------------- themes ----------------
-   The ladder is data, and each theme brings its own draw function, so the
-   whole game can be re-skinned by switching one key. Radii and scores are
-   shared: they are what the physics and the difficulty curve are tuned to. */
+/* ---------------- 사다리 ----------------
+   단계는 그냥 데이터다. 크기와 점수는 물리와 난이도를 여기에 맞춰
+   두었으니 손대면 한 판 길이가 통째로 바뀐다. */
 // 열한 단계.
 //
 // 끝판(황금냥)은 좀처럼 못 보게 두는 게 이 게임의 재미다. 끝판 하나를
@@ -147,36 +140,22 @@ const W=cv.width, H=cv.height;
 const SIZES  = [13, 17, 22, 28, 34, 42, 51, 61, 72, 85, 100];
 const SCORES = [1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 100];
 
-const THEMES = {
-  cat: {
-    label:'고양이', icon:'🐱', title:'황금냥', goalWord:'황금냥',
-    blurb:'고양이를 떨어뜨려 같은 냥끼리 합치세요.',
-    names:['아기냥','턱시도','치즈냥','삼색이','고등어','회색냥','페르시안','샴','숲냥','호랑이','황금냥'],
-    cols:[['#f6d7e4','#dba9c2'], ['#5a5f72','#2f3342'], ['#ffc46b','#e09327'],
-          ['#f4e3c8','#c98f5e'], ['#8fa0bb','#5b6b86'], ['#b9bdc9','#8a8f9e'],
-          ['#f3ece0','#cdbfa8'], ['#e8dcc6','#9c7b5c'], ['#c78f5c','#8a5c34'],
-          ['#f2a13c','#c2701a'], ['#ffd75e','#e0a017']],
-    draw: drawCat,
-  },
-  planet: {
-    label:'행성', icon:'🪐', title:'태양', goalWord:'태양',
-    blurb:'행성을 떨어뜨려 같은 것끼리 합치세요.',
-    names:['운석','달','수성','금성','지구','화성','천왕성','해왕성','토성','목성','태양'],
-    cols:[['#9a938c','#5f5a55'], ['#dcd8d0','#a09a92'], ['#b8a58f','#7d6e5d'],
-          ['#e8c37a','#b8904a'], ['#5aa0e0','#2c5f9e'], ['#e0724a','#a3452a'],
-          ['#8fd8e0','#4f9aa8'], ['#5a78d8','#31479c'], ['#e0c98f','#a8905a'],
-          ['#d9a878','#9c6f45'], ['#ffd75e','#f08c1a']],
-    draw: drawPlanet,
-  },
+const TH = {
+  icon:'🐱', goalWord:'황금냥',
+  blurb:'고양이를 떨어뜨려 같은 냥끼리 합치세요.',
+  names:['아기냥','턱시도','치즈냥','삼색이','고등어','회색냥','페르시안','샴','숲냥','호랑이','황금냥'],
+  // 아기냥은 원래 분홍이었는데 분홍 몸에 분홍 귀, 게다가 코까지 겹쳐서
+  // 돼지로 보였다. 살구빛 크림으로 바꿨다.
+  cols:[['#ffeada','#e6bd97'], ['#5a5f72','#2f3342'], ['#ffc46b','#e09327'],
+        ['#f4e3c8','#c98f5e'], ['#8fa0bb','#5b6b86'], ['#b9bdc9','#8a8f9e'],
+        ['#f3ece0','#cdbfa8'], ['#e8dcc6','#9c7b5c'], ['#c78f5c','#8a5c34'],
+        ['#f2a13c','#c2701a'], ['#ffd75e','#e0a017']],
 };
-let themeKey = localStorage.getItem('suika_theme') || 'cat';
-if(!THEMES[themeKey]) themeKey = 'cat';
 let FRUITS = [];
 function buildLadder(){
-  const th = THEMES[themeKey];
   FRUITS = SIZES.map((r,i)=>({
-    n: th.names[i], r, score: SCORES[i], i,
-    c: th.cols[i][0], c2: th.cols[i][1],
+    n: TH.names[i], r, score: SCORES[i], i,
+    c: TH.cols[i][0], c2: TH.cols[i][1],
     gold: i===SIZES.length-1,
   }));
 }
@@ -428,25 +407,24 @@ function burst(x,y,f,r){
 }
 
 /* ---------------- game state ---------------- */
-const bestKey = ()=> 'suika_best_'+themeKey;
+const BEST_KEY = 'suika_best';
 
 // 최고점은 판이 끝났을 때만 적는다. 노는 도중에 적으면 바깥 앱이 그걸
 // 5초마다 읽어다 올려서, 한 판에 순위 알림이 몇 번씩 울린다.
 //
-// 순위표에는 테마와 상관없이 하나로 올린다. 고양이든 행성이든 크기와
-// 점수표가 똑같아서 같은 조건이다. 테마별 기록은 게임 안에서만 쓴다.
 window.saveBest = function(){
   try{
     if(score > best) best = score;
-    if(best > 0) localStorage.setItem(bestKey(), best);
-    const all = Math.max(
-      +(localStorage.getItem('suika_best_cat')||0),
-      +(localStorage.getItem('suika_best_planet')||0));
-    if(all > 0) localStorage.setItem('suika_best', all);
+    if(best > 0) localStorage.setItem(BEST_KEY, best);
   }catch(e){}
 };
 addEventListener('pagehide', window.saveBest);
-let score=0, best=+(localStorage.getItem(bestKey())||0);
+// 예전엔 테마별로 따로 적었다. 행성을 없앴으니 둘 중 높은 쪽을 물려받는다.
+let score=0, best=Math.max(
+  +(localStorage.getItem(BEST_KEY)||0),
+  +(localStorage.getItem('suika_best_cat')||0),
+  +(localStorage.getItem('suika_best_planet')||0));
+if(best>0) try{ localStorage.setItem(BEST_KEY,best); }catch(e){}
 let cursor=W/2, current=null, nextType=0, dropLock=0;
 let playing=false, over=false, madeGold=false, overTimer=0, raf=null, lastT=0;
 $('#best').textContent=best;
@@ -539,7 +517,13 @@ function catMarks(ctx, r, f){
   const dark = 'rgba(38,30,42,.72)';
   const white = 'rgba(255,255,255,.88)';
 
-  if(i===1){                                   // 턱시도 — 턱과 가슴이 하얗다
+  if(i===0){                                   // 아기냥 — 정수리에 배냇털 한 가닥
+    ctx.strokeStyle = 'rgba(196,148,108,.6)'; ctx.lineWidth = Math.max(1.2, r*0.11); ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(-r*0.18, -r*0.62);
+    ctx.quadraticCurveTo(0, -r*1.02, r*0.18, -r*0.62);
+    ctx.stroke();
+  } else if(i===1){                            // 턱시도 — 턱과 가슴이 하얗다
     ctx.fillStyle = white;
     ctx.beginPath();
     ctx.ellipse(0, r*0.62, r*0.52, r*0.46, 0, 0, 6.284); ctx.fill();
@@ -681,66 +665,7 @@ function drawCat(ctx,x,y,r,f,rot){
   }
   ctx.restore();
 }
-function drawPlanet(ctx,x,y,r,f,rot){
-  ctx.save(); ctx.translate(x,y); ctx.rotate(rot||0);
-  const ringed = f.n==='토성';
-  if(ringed){
-    ctx.save(); ctx.rotate(-0.42);
-    ctx.strokeStyle='rgba(230,205,150,.75)'; ctx.lineWidth=Math.max(2,r*0.13);
-    ctx.beginPath(); ctx.ellipse(0,0,r*1.55,r*0.42,0,0,6.284); ctx.stroke();
-    ctx.restore();
-  }
-  ball(ctx,r,f.c,f.c2);
-  ctx.save();
-  ctx.beginPath(); ctx.arc(0,0,r-1,0,6.284); ctx.clip();
-  // 돌덩이 셋은 곰보, 나머지는 가로줄. 작을 때는 둘 다 안 보이니 건너뛴다.
-  if(f.i<=2 && r>=14){
-    ctx.fillStyle='rgba(0,0,0,.18)';
-    for(const [cx0,cy0,cr] of [[-0.38,-0.30,0.26],[0.30,0.12,0.20],[-0.10,0.52,0.15],[0.52,-0.46,0.13]]){
-      ctx.beginPath(); ctx.arc(cx0*r, cy0*r, cr*r, 0, 6.284); ctx.fill();
-    }
-  } else if(r>=22){
-    ctx.globalAlpha=.30; ctx.fillStyle=f.c2;
-    for(let i=-2;i<=2;i++){
-      ctx.beginPath();
-      ctx.ellipse(0, i*r*0.36, r*1.1, r*0.13, 0, 0, 6.284); ctx.fill();
-    }
-    ctx.globalAlpha=1;
-  }
-  ctx.restore();
-  ctx.fillStyle='rgba(255,255,255,.30)';
-  ctx.beginPath(); ctx.ellipse(-r*0.34,-r*0.40, r*0.26, r*0.17, -0.6, 0, 6.284); ctx.fill();
-  // 행성한테도 표정을 줬다. 고양이 테마에서 넘어와도 같은 게임처럼 보인다.
-  if(r>=14){
-    const eo=r*0.30, ey=r*0.02, er=Math.max(1.2, r*0.115);
-    ctx.fillStyle='rgba(24,20,30,.78)';
-    ctx.beginPath(); ctx.ellipse(-eo,ey,er*0.86,er,0,0,6.284); ctx.fill();
-    ctx.beginPath(); ctx.ellipse( eo,ey,er*0.86,er,0,0,6.284); ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,.9)';
-    ctx.beginPath(); ctx.arc(-eo+er*0.30, ey-er*0.36, er*0.34,0,6.284); ctx.fill();
-    ctx.beginPath(); ctx.arc( eo+er*0.30, ey-er*0.36, er*0.34,0,6.284); ctx.fill();
-    ctx.strokeStyle='rgba(24,20,30,.6)'; ctx.lineWidth=Math.max(1,r*0.038); ctx.lineCap='round';
-    ctx.beginPath(); ctx.arc(0, r*0.16, r*0.20, 0.5, Math.PI-0.5); ctx.stroke();
-    if(r>=20){
-      ctx.fillStyle='rgba(255,150,170,.24)';
-      ctx.beginPath(); ctx.ellipse(-r*0.56, r*0.26, r*0.20, r*0.13, 0, 0, 6.284); ctx.fill();
-      ctx.beginPath(); ctx.ellipse( r*0.56, r*0.26, r*0.20, r*0.13, 0, 0, 6.284); ctx.fill();
-    }
-  }
-  // the sun burns rather than reflects
-  if(f.gold){
-    ctx.strokeStyle='rgba(255,220,120,.7)'; ctx.lineWidth=Math.max(1.5,r*0.05);
-    for(let i=0;i<10;i++){
-      const a=i/10*6.284;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a)*r*1.03, Math.sin(a)*r*1.03);
-      ctx.lineTo(Math.cos(a)*r*1.20, Math.sin(a)*r*1.20);
-      ctx.stroke();
-    }
-  }
-  ctx.restore();
-}
-function fruitPath(ctx,x,y,r,f,rot){ THEMES[themeKey].draw(ctx,x,y,r,f,rot); }
+function fruitPath(ctx,x,y,r,f,rot){ drawCat(ctx,x,y,r,f,rot); }
 function draw(){
   cx.clearRect(0,0,W,H);
   if(goldFlash>0){
@@ -884,7 +809,7 @@ function gameOver(){
   window.saveBest();
   $('#best').textContent = best;
   const biggest=bodies.reduce((m,b)=>Math.max(m,b.type),0);
-  $('#overTitle').textContent = madeGold ? THEMES[themeKey].goalWord+' 달성! 🏆' : '가득 찼어요!';
+  $('#overTitle').textContent = madeGold ? TH.goalWord+' 달성! 🏆' : '가득 찼어요!';
   $('#overText').innerHTML =
     `점수 <b>${score.toLocaleString()}</b> · 최고 단계 <b>${FRUITS[biggest].n}</b><br>` +
     `버틴 개수 <b>${dropped}</b> · 최대 연쇄 <b>${chainBest||1}</b>` +
@@ -929,42 +854,17 @@ $('#retryBtn').onclick=newGame;
 addEventListener('pagehide', silence);
 addEventListener('beforeunload', silence);
 
-/* ---- theme switcher ---- */
+/* ---- 첫 화면 채우기 ---- */
 function applyTheme(){
   buildLadder();
-  const th=THEMES[themeKey];
-  // 이름은 '냥탑' 으로 고정. 테마가 바뀌어도 같은 게임이다.
   document.title = '냥탑';
-  $('#title').textContent = th.icon+' 냥탑';
-  $('#startTitle').textContent = th.icon+' 냥탑';
-  $('#startBlurb').innerHTML = th.blurb+'<br>통 밖으로 넘치면 끝이에요.';
-  best = +(localStorage.getItem(bestKey())||0);
+  $('#title').textContent = TH.icon+' 냥탑';
+  $('#startTitle').textContent = TH.icon+' 냥탑';
+  $('#startBlurb').innerHTML = TH.blurb+'<br>통 밖으로 넘치면 끝이에요.';
   $('#best').textContent = best;
-  document.querySelectorAll('#themes button').forEach(b=>
-    b.classList.toggle('on', b.dataset.k===themeKey));
   renderLadder();
   drawNext(); draw();
 }
-(function(){
-  const el=$('#themes');
-  Object.entries(THEMES).forEach(([k,th])=>{
-    const b=document.createElement('button');
-    b.dataset.k=k; b.textContent=th.icon+' '+th.label;
-    b.onclick=()=>{
-      if(playing && !over && bodies.length){
-        if(!confirm('테마를 바꾸면 지금 판은 끝나요. 바꿀까요?')) return;
-      }
-      themeKey=k; localStorage.setItem('suika_theme',k);
-      bodies=[]; parts=[]; playing=false; over=false;
-      $('#startScreen').classList.remove('hide');
-      $('#overScreen').classList.add('hide');
-      score=0; $('#score').textContent=0;
-      current=rollType(); nextType=rollType();
-      applyTheme();
-    };
-    el.appendChild(b);
-  });
-})();
 
 /* ladder strip under the board */
 function renderLadder(){
