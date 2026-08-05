@@ -183,7 +183,12 @@ const DEAD = 108;                 // pile above this for a while = game over
 /* ---------------- physics ----------------
    Impulse-based circles: integrate, then relax overlaps a few times per step.
    Several substeps keep a tall pile from jittering itself apart.            */
-const GRAV=2100, REST=0.12, FRICT=0.986, SUB=4, ITER=4;
+// Restitution and drag are what make this feel alive AND what make placement
+// matter. At 0.12/0.986 pieces packed perfectly flat, which meant same-tier
+// neighbours found each other on their own — random play scored as well as
+// careful play. Letting them bounce leaves gaps and uneven ground, so where
+// you drop actually decides something.
+const GRAV=2100, REST=0.26, FRICT=0.9965, SUB=4, ITER=4;
 let bodies=[], seq=0;
 
 function addBody(x,y,type,vx=0,vy=0){
@@ -257,9 +262,11 @@ function stepPhysics(dt){
   // off that phantom energy so piles genuinely go quiet.
   for(const b of bodies){
     b.moved = Math.hypot(b.x-b._px, b.y-b._py);
-    if(b.moved < 0.55){
+    if(b.moved < 0.4){
       b.rest = (b.rest||0) + dt;
-      if(b.rest > 0.12){ b.vx*=0.35; b.vy*=0.35; b.vrot = 0; }
+      // wait longer and damp gentler than before, so a pile settles instead of
+      // freezing the instant it touches down
+      if(b.rest > 0.25){ b.vx*=0.6; b.vy*=0.6; b.vrot = 0; }
     } else b.rest = 0;
   }
 }
@@ -273,17 +280,34 @@ function resolveMerges(){
       if(dx*dx+dy*dy > rr*rr*1.02) continue;
       a.merged=b.merged=true;
       const t=a.type;
+      // Merges that land close together count as one chain. A cascade is the
+      // one thing here that placement actually earns, so it is worth paying for.
+      chain = (chainTimer > 0) ? chain+1 : 1;
+      chainTimer = 0.55;
+      const mult = CHAIN_MULT[Math.min(chain, CHAIN_MULT.length)-1];
+      if(chain >= 2){
+        chainBest = Math.max(chainBest, chain);
+        chainFlash = 1;
+        // A cascade fires many merges at once; a popup for each buries the
+        // board. Only call out milestones, and keep at most a few on screen —
+        // the running counter in the corner covers the rest.
+        if(chain===3 || chain===5 || chain>=7){
+          if(texts.length < 4)
+            texts.push({x:(a.x+b.x)/2, y:(a.y+b.y)/2-24,
+                        s:chain+'연쇄 ×'+mult, life:.9, vy:-52, col:'#ffd34d'});
+        }
+      }
       if(t < FRUITS.length-1){
         const nb=addBody((a.x+b.x)/2, (a.y+b.y)/2, t+1,
                          (a.vx+b.vx)/2, (a.vy+b.vy)/2);
         nb.pop=1;
-        score += FRUITS[t+1].score;
+        score += Math.round(FRUITS[t+1].score * mult);
         if(t+1===FRUITS.length-1 && !madeGold){ madeGold=true; goldFlash=1; fanfare(); }
         burst(nb.x, nb.y, FRUITS[t+1], nb.r);
         pling(t+1);
       } else {
-        // two golden watermelons cancel out — a big bonus and space back
-        score += 500; burst(a.x,a.y,FRUITS[t],a.r*1.3); fanfare();
+        // two of the final tier cancel out — a big bonus and space back
+        score += Math.round(500*mult); burst(a.x,a.y,FRUITS[t],a.r*1.3); fanfare();
       }
       break;
     }
@@ -336,6 +360,15 @@ function fanfare(){
 }
 function silence(){ if(ac){ try{ac.close();}catch(e){} ac=null; } }
 
+/* ---------------- scoring extras ----------------
+   Two things reward playing well rather than merely playing long: cascades
+   set off by one drop, and how many pieces you survive. */
+const CHAIN_MULT=[1, 1.5, 2, 3, 4, 6, 8];
+const SURVIVE_STEP=25;                       // a bonus every N pieces dropped
+let chain=0, chainTimer=0, chainBest=0, chainFlash=0;
+let dropped=0, nextMilestone=SURVIVE_STEP;
+let texts=[];
+
 /* ---------------- particles ---------------- */
 let parts=[], goldFlash=0;
 function burst(x,y,f,r){
@@ -356,8 +389,10 @@ $('#best').textContent=best;
 
 function rollType(){ return Math.floor(Math.random()*DROPPABLE); }
 function newGame(){
-  bodies=[]; parts=[]; score=0; over=false; madeGold=false; overTimer=0;
+  bodies=[]; parts=[]; texts=[]; score=0; over=false; madeGold=false; overTimer=0;
   goldFlash=0; dropLock=0; cursor=W/2;
+  chain=0; chainTimer=0; chainBest=0; chainFlash=0;
+  dropped=0; nextMilestone=SURVIVE_STEP;
   current=rollType(); nextType=rollType();
   playing=true;
   $('#score').textContent=0;
@@ -373,6 +408,15 @@ function drop(){
   const x=Math.max(f.r+2, Math.min(W-f.r-2, cursor));
   const b=addBody(x, TOP, current, 0, 60);
   b.age=0;
+  dropped++;
+  // surviving is worth more the longer it goes on
+  if(dropped >= nextMilestone){
+    const step = nextMilestone/SURVIVE_STEP;
+    const bonus = 50*step;
+    score += bonus;
+    texts.push({x:W/2, y:H*0.34, s:dropped+'개 돌파 +'+bonus, life:1.3, vy:-30, col:'#8fd66a'});
+    nextMilestone += SURVIVE_STEP;
+  }
   current=nextType; nextType=rollType();
   dropLock=0.34;
   drawNext();
@@ -531,6 +575,26 @@ function draw(){
     cx.beginPath(); cx.arc(p.x,p.y,p.size,0,6.284); cx.fill();
   });
   cx.globalAlpha=1;
+  // floating score callouts
+  texts.forEach(t=>{
+    cx.save();
+    cx.globalAlpha=Math.min(1,t.life*1.4);
+    cx.font='900 17px "Pretendard","Apple SD Gothic Neo",system-ui,sans-serif';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.lineWidth=4; cx.strokeStyle='rgba(15,10,20,.85)';
+    cx.strokeText(t.s, t.x, t.y);
+    cx.fillStyle=t.col; cx.fillText(t.s, t.x, t.y);
+    cx.restore();
+  });
+  // live chain indicator
+  if(chain>=2 && chainTimer>0){
+    cx.save();
+    cx.globalAlpha=Math.min(1, chainTimer*2);
+    cx.font='900 15px system-ui, sans-serif'; cx.textAlign='right';
+    cx.fillStyle='#ffd34d';
+    cx.fillText(chain+'연쇄!', W-12, 52);
+    cx.restore();
+  }
 }
 function drawNext(){
   nctx.clearRect(0,0,nx.width,nx.height);
@@ -566,6 +630,13 @@ function loop(ts){
   parts.forEach(p=>{ p.vy+=900*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*1.5; });
   if(parts.length) parts=parts.filter(p=>p.life>0);
   if(goldFlash>0) goldFlash=Math.max(0,goldFlash-dt*1.6);
+  if(chainFlash>0) chainFlash=Math.max(0,chainFlash-dt*2);
+  // a chain lapses once merges stop coming
+  if(chainTimer>0){ chainTimer-=dt; if(chainTimer<=0) chain=0; }
+  if(texts.length){
+    texts.forEach(t=>{ t.y+=t.vy*dt; t.vy*=0.94; t.life-=dt*0.9; });
+    texts=texts.filter(t=>t.life>0);
+  }
   draw();
 }
 function gameOver(){
@@ -574,7 +645,8 @@ function gameOver(){
   const biggest=bodies.reduce((m,b)=>Math.max(m,b.type),0);
   $('#overTitle').textContent = madeGold ? THEMES[themeKey].goalWord+' 달성! 🏆' : '가득 찼어요!';
   $('#overText').innerHTML =
-    `점수 <b>${score.toLocaleString()}</b> · 가장 큰 과일 <b>${FRUITS[biggest].n}</b>` +
+    `점수 <b>${score.toLocaleString()}</b> · 최고 단계 <b>${FRUITS[biggest].n}</b><br>` +
+    `버틴 개수 <b>${dropped}</b> · 최대 연쇄 <b>${chainBest||1}</b>` +
     (score>=best && score>0 ? '<br>🎉 최고 기록!' : '');
   $('#overScreen').classList.remove('hide');
 }
