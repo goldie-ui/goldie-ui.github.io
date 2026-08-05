@@ -50,13 +50,59 @@
     aspect-ratio:1}
   .bg-cell{background:var(--cell); border-radius:12px}
   .tiles{position:absolute; inset:12px}
+  /* 자리는 --x/--y 로 잡는다. 애니메이션이 transform 을 통째로 덮어쓰기
+     때문에, 자리를 transform 안에 직접 적으면 튀어오르는 순간 타일이
+     왼쪽 위 구석으로 날아갔다 돌아온다. 변수로 빼 두면 keyframes 안에서도
+     같은 자리를 유지할 수 있다. */
   .tile{position:absolute; display:flex; align-items:center; justify-content:center;
     border-radius:12px; font-weight:800; font-variant-numeric:tabular-nums;
+    transform:translate(var(--x,0px),var(--y,0px));
     transition:transform .13s ease, opacity .13s; will-change:transform}
-  .tile.pop{animation:pop .16s ease}
-  .tile.spawn{animation:spawn .16s ease}
-  @keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.14)}100%{transform:scale(1)}}
-  @keyframes spawn{0%{transform:scale(0)}100%{transform:scale(1)}}
+  .tile.pop{animation:pop .19s cubic-bezier(.3,1.5,.5,1)}
+  .tile.spawn{animation:spawn .18s cubic-bezier(.3,1.6,.5,1)}
+  .tile.big{animation:bigpop .34s cubic-bezier(.3,1.5,.5,1)}
+  @keyframes pop{
+    0%{transform:translate(var(--x,0px),var(--y,0px)) scale(1)}
+    45%{transform:translate(var(--x,0px),var(--y,0px)) scale(1.2)}
+    100%{transform:translate(var(--x,0px),var(--y,0px)) scale(1)}}
+  @keyframes spawn{
+    0%{transform:translate(var(--x,0px),var(--y,0px)) scale(0)}
+    100%{transform:translate(var(--x,0px),var(--y,0px)) scale(1)}}
+  /* 큰 수가 나왔을 때. 한 번 더 크게 부풀고 빛이 돈다. */
+  @keyframes bigpop{
+    0%{transform:translate(var(--x,0px),var(--y,0px)) scale(1); filter:brightness(1)}
+    35%{transform:translate(var(--x,0px),var(--y,0px)) scale(1.38); filter:brightness(1.9)}
+    100%{transform:translate(var(--x,0px),var(--y,0px)) scale(1); filter:brightness(1)}}
+
+  /* 합쳐진 자리에서 떠오르는 점수, 판 한가운데 뜨는 연쇄·콤보 문구 */
+  /* overflow 를 막지 않는다. 맨 윗줄에서 합쳐진 점수가 위로 떠오를 때
+     판 밖으로 나가는데, 가둬 두면 그게 잘려 보인다. */
+  .fx{position:absolute; inset:12px; pointer-events:none; z-index:4}
+  .pt{position:absolute; font-weight:900; font-variant-numeric:tabular-nums;
+    color:#fff; animation:rise .85s ease-out forwards; white-space:nowrap;
+    -webkit-text-stroke:3px rgba(14,15,26,.75); paint-order:stroke fill}
+  @keyframes rise{
+    0%{opacity:0; transform:translate(-50%,6px) scale(.7)}
+    18%{opacity:1; transform:translate(-50%,-6px) scale(1.15)}
+    100%{opacity:0; transform:translate(-50%,-46px) scale(1)}}
+  .banner{position:absolute; left:50%; top:34%; font-weight:900; white-space:nowrap;
+    -webkit-text-stroke:4px rgba(14,15,26,.7); paint-order:stroke fill;
+    animation:bann .9s ease-out forwards}
+  @keyframes bann{
+    0%{opacity:0; transform:translate(-50%,10px) scale(.6)}
+    20%{opacity:1; transform:translate(-50%,0) scale(1.15)}
+    75%{opacity:1; transform:translate(-50%,-6px) scale(1)}
+    100%{opacity:0; transform:translate(-50%,-22px) scale(1)}}
+
+  /* 크게 터졌을 때 판 테두리가 번쩍이고 살짝 흔들린다 */
+  .board.flash::after{content:''; position:absolute; inset:0; border-radius:18px;
+    border:4px solid #ffd633; box-shadow:0 0 26px rgba(255,214,51,.65) inset;
+    pointer-events:none; z-index:4; animation:flash .55s ease-out forwards}
+  @keyframes flash{0%{opacity:1}100%{opacity:0}}
+  .board.shake{animation:shake .3s ease}
+  @keyframes shake{
+    0%,100%{transform:translate(0,0)} 25%{transform:translate(-5px,3px)}
+    50%{transform:translate(4px,-3px)} 75%{transform:translate(-3px,-2px)}}
   .overlay{position:absolute; inset:0; background:rgba(14,15,26,.82); border-radius:18px;
     display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px;
     backdrop-filter:blur(4px); z-index:5}
@@ -87,6 +133,7 @@
 <div class="board-wrap">
   <div class="board" id="board">
     <div class="tiles" id="tiles"></div>
+    <div class="fx" id="fx"></div>
     <div class="overlay" id="overlay">
       <h2 id="overlayText">게임 오버</h2>
       <button id="retry">다시 하기</button>
@@ -106,6 +153,12 @@ const colors = {
   1024:['#ffc14d','#2a1e00'], 2048:['#ffd633','#2a1e00'], 4096:['#3ddc97','#04231a'],
 };
 let grid, score, best = +(localStorage.getItem('g2048_best')||0), idc = 0, over = false, won = false;
+// 최고점은 판이 끝났을 때만 적는다. 노는 도중에 적으면 바깥 앱이 그걸
+// 5초마다 읽어다 올려서, 한 판에 순위 알림이 몇 번씩 울린다.
+// 바깥에서 게임을 닫을 때도 불러 주니(games.js), 하던 판이 날아가지도 않는다.
+window.saveBest = function(){ if(best>0) localStorage.setItem('g2048_best', best); };
+addEventListener('pagehide', window.saveBest);
+
 document.getElementById('best').textContent = best;
 
 function empty(){ return Array.from({length:N},()=>Array(N).fill(null)); }
@@ -144,11 +197,18 @@ function render(){
     t.el.style.background = bg; t.el.style.color = fg;
     t.el.style.fontSize = (t.val<100?s*0.42:t.val<1000?s*0.34:s*0.26)+'px';
     t.el.textContent = t.val;
+    // 자리는 변수로 넣는다. transform 에 직접 쓰면 튀어오르는 애니메이션이
+    // 그걸 덮어써서 타일이 구석으로 날아갔다 돌아온다.
     const p = pos(t.r,t.c);
-    t.el.style.transform = `translate(${p.x}px,${p.y}px)`;
-    if(t.merged){ t.el.classList.add('pop'); t.merged=false;
-      setTimeout(()=>t.el&&t.el.classList.remove('pop'),160); }
-    if(t.spawn){ t.spawn=false; setTimeout(()=>t.el&&t.el.classList.remove('spawn'),160); }
+    t.el.style.setProperty('--x', p.x+'px');
+    t.el.style.setProperty('--y', p.y+'px');
+    if(t.merged){
+      const cls = t.val>=256 ? 'big' : 'pop';
+      t.el.classList.remove('pop','big'); void t.el.offsetWidth;   // 다시 돌게
+      t.el.classList.add(cls); t.merged=false;
+      setTimeout(()=>t.el&&t.el.classList.remove(cls), cls==='big'?340:190);
+    }
+    if(t.spawn){ t.spawn=false; setTimeout(()=>t.el&&t.el.classList.remove('spawn'),180); }
   }
   // remove orphan elements
   [...tilesEl.children].forEach(el=>{ if(el._id && !seen.has(el._id)) el.remove(); });
@@ -156,25 +216,131 @@ function render(){
 function tagEls(){ for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const t=grid[r][c]; if(t&&t.el) t.el._id=t.id; } }
 
 function slide(line){
-  // line: array of tiles/null length N -> returns {line,gained,moved}
+  // line: array of tiles/null length N -> returns {line,gained,merged}
   const tiles = line.filter(Boolean);
-  const out = []; let gained=0, i=0;
+  const out = []; let gained=0, i=0; const mergedTiles=[];
   while(i<tiles.length){
     if(i+1<tiles.length && tiles[i].val===tiles[i+1].val){
       const merged = tiles[i];
       merged.val *= 2; merged.merged = true; gained += merged.val;
+      mergedTiles.push(merged);
       tiles[i+1].dead = true; // will be removed
       out.push(merged); i+=2;
     } else { out.push(tiles[i]); i++; }
   }
   while(out.length<N) out.push(null);
-  return {line:out, gained};
+  return {line:out, gained, merged:mergedTiles};
 }
+// ── 효과 ──────────────────────────────────────────────────────────────
+const fxEl = document.getElementById('fx');
+
+// 빨리 연달아 두면 사라지기 전에 계속 쌓인다. 오래된 것부터 걷어낸다.
+function trimFx(){
+  while(fxEl.children.length > 24) fxEl.firstChild.remove();
+}
+
+// 합쳐진 그 칸 위에서 점수가 떠오른다. 어디서 몇 점을 벌었는지 보인다.
+function floatText(r, c, str, color, size){
+  const p = pos(r,c);
+  const d = document.createElement('div');
+  d.className = 'pt'; d.textContent = str;
+  d.style.color = color;
+  d.style.fontSize = size+'px';
+  // 타일 바로 위에서 떠오르게 한다. 타일 한가운데 두면 숫자와 겹쳐 읽기 힘들다.
+  d.style.left = (p.x + p.s/2)+'px';
+  d.style.top  = (p.y - 10)+'px';
+  fxEl.appendChild(d); trimFx();
+  setTimeout(()=>d.remove(), 900);
+}
+// 판 한가운데 뜨는 큰 문구. 여러 개면 아래로 한 줄씩 내려 쌓는다.
+function banner(str, color, size){
+  const d = document.createElement('div');
+  d.className = 'banner'; d.textContent = str;
+  d.style.color = color; d.style.fontSize = size+'px';
+  fxEl.appendChild(d); trimFx();
+  // 문구가 길어지면 판 밖으로 나가 양끝이 잘린다. 폭에 맞춰 글자를 줄인다.
+  const avail = fxEl.clientWidth - 6;
+  if(d.scrollWidth > avail) d.style.fontSize = Math.max(12, size * avail / d.scrollWidth) + 'px';
+  setTimeout(()=>d.remove(), 950);
+}
+function flashBoard(){
+  boardEl.classList.remove('flash'); void boardEl.offsetWidth;
+  boardEl.classList.add('flash');
+  setTimeout(()=>boardEl.classList.remove('flash'), 560);
+}
+function shakeBoard(){
+  boardEl.classList.remove('shake'); void boardEl.offsetWidth;
+  boardEl.classList.add('shake');
+  setTimeout(()=>boardEl.classList.remove('shake'), 310);
+}
+
+// ── 소리 ──────────────────────────────────────────────────────────────
+// 음원 파일 없이 웹오디오로 만든다. 캣트리스와 같은 방식이다.
+let _ac = null;
+function actx(){
+  if(!_ac){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return null;
+    _ac = new AC();
+  }
+  if(_ac.state === 'suspended') _ac.resume();
+  return _ac;
+}
+function tone(freq, t0, dur, type, vol){
+  const ac = actx(); if(!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  o.connect(g); g.connect(ac.destination);
+  o.start(t0); o.stop(t0+dur+0.02);
+}
+// 합칠 때. 큰 수일수록 낮고 묵직하게 울린다.
+function mergeBlip(val){
+  const ac = actx(); if(!ac) return;
+  try{
+    const step = Math.min(9, Math.log2(val) - 2);      // 4→0, 2048→9
+    const f = 880 * Math.pow(2, -step/12);
+    tone(f, ac.currentTime, 0.13, 'triangle', 0.06);
+    tone(f*2, ac.currentTime+0.004, 0.09, 'sine', 0.022);
+  }catch(e){}
+}
+// 콤보가 이어질수록 음이 한 칸씩 올라간다. 귀로 세어진다.
+function comboBlip(n){
+  const ac = actx(); if(!ac) return;
+  try{
+    const f = 523.25 * Math.pow(2, Math.min(n,12)*2/12);
+    tone(f, ac.currentTime, 0.2, 'triangle', 0.05);
+  }catch(e){}
+}
+function fanfare(){
+  const ac = actx(); if(!ac) return;
+  try{
+    const t0 = ac.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f,i)=>
+      tone(f, t0+i*0.08, 0.4, 'square', 0.055));
+  }catch(e){}
+}
+function sadTone(){
+  const ac = actx(); if(!ac) return;
+  try{
+    const t0 = ac.currentTime;
+    [392, 330, 262].forEach((f,i)=> tone(f, t0+i*0.13, 0.35, 'triangle', 0.06));
+  }catch(e){}
+}
+
+// 콤보는 쉬지 않고 합친 횟수. -1 이면 안 이어지는 중.
+// reached 는 처음 만들어 본 숫자들 — 첫 도달 보너스는 한 번만 준다.
+let combo = -1, reached = new Set();
+
 let history = [], redoStack = [];
 function snapshot(){
   const cells=[];
   for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const t=grid[r][c]; if(t) cells.push({r,c,val:t.val}); }
-  return {cells, score, won};
+  // 콤보와 첫 도달 기록도 같이 담는다. 안 그러면 되돌리기로 첫 도달
+  // 보너스를 몇 번이고 다시 받을 수 있다.
+  return {cells, score, won, combo, reached:[...reached]};
 }
 function updateBtns(){
   document.getElementById('undo').disabled = history.length===0;
@@ -185,6 +351,7 @@ function restore(s){
   [...tilesEl.children].forEach(el=>el.remove());
   s.cells.forEach(o=>{ grid[o.r][o.c] = newTile(o.r,o.c,o.val,false); });
   score = s.score; won = s.won; over = false;
+  combo = s.combo ?? -1; reached = new Set(s.reached || []);
   document.getElementById('score').textContent = score;
   render(); tagEls(); hideOverlay();
 }
@@ -218,12 +385,12 @@ function move(dir){
     else if(dir==='u') grid[j][i]=val;
     else grid[N-1-j][i]=val;
   };
-  const deadTiles=[];
+  const deadTiles=[], mergedAll=[];
   for(let i=0;i<N;i++){
     const line=[]; for(let j=0;j<N;j++) line.push(read(i,j));
     const before = line.map(t=>t?t.id:0).join(',');
-    const {line:res, gained:g} = slide(line);
-    gained += g;
+    const {line:res, gained:g, merged:mg} = slide(line);
+    gained += g; mergedAll.push(...mg);
     // collect dead (merged-away) tiles for removal after animation
     line.forEach(t=>{ if(t&&t.dead) deadTiles.push(t); });
     const after = res.map(t=>t?t.id:0).join(',');
@@ -246,16 +413,57 @@ function move(dir){
 
   // animate dead tiles to their merge target then remove
   deadTiles.forEach(t=>{
-    if(t.el){ const p=pos(t.r,t.c); t.el.style.transform=`translate(${p.x}px,${p.y}px)`;
+    if(t.el){ const p=pos(t.r,t.c);
+      t.el.style.setProperty('--x', p.x+'px');
+      t.el.style.setProperty('--y', p.y+'px');
       const el=t.el; setTimeout(()=>el.remove(),130); }
   });
 
-  score += gained;
+  // ── 점수 ────────────────────────────────────────────────────────────
+  // 예전엔 합쳐진 값을 그냥 더하기만 했다. 그러면 판을 정리해서 한 번에
+  // 터뜨리든 하나씩 흘리든 점수가 똑같아서, 잘 두는 재미가 없다.
+  const n = mergedAll.length;
+  const chain  = n >= 2 ? Math.round(gained * 0.5 * (n-1)) : 0;   // 한 번에 여럿
+  // 콤보는 '연쇄를 이어서 낸 횟수'다. 그냥 합치기만 세면 2048 은 거의
+  // 매 수마다 합쳐져서 콤보가 끝없이 쌓인다. 그러면 잘 둔 사람이 아니라
+  // 오래 둔 사람이 이기는, 시간 재기가 되어 버린다.
+  combo = n >= 2 ? combo+1 : -1;
+  const comboB = combo > 0 ? 40 * Math.min(combo, 8) : 0;
+  let milestone = 0, topVal = 0;
+  for(const t of mergedAll){
+    if(t.val > topVal) topVal = t.val;
+    if(t.val >= 128 && !reached.has(t.val)){ reached.add(t.val); milestone += t.val*2; }
+  }
+  const total = gained + chain + comboB + milestone;
+  score += total;
   document.getElementById('score').textContent = score;
-  if(score>best){ best=score; localStorage.setItem('g2048_best',best);
+  if(score>best){ best=score;
     document.getElementById('best').textContent = best; }
 
   render(); tagEls();
+
+  // ── 눈과 귀 ─────────────────────────────────────────────────────────
+  mergedAll.forEach(t=>{
+    const c = (colors[t.val]||['#3ddc97'])[0];
+    floatText(t.r, t.c, '+'+t.val, c, t.val>=256?21:17);
+  });
+  // 문구는 한 줄로 합친다. 세 줄이 쌓이면 판을 다 가려서 뭐가 어디
+  // 있는지 안 보인다.
+  const parts = [];
+  if(chain)     parts.push(`${n}연쇄`);
+  if(comboB)    parts.push(`${combo}콤보`);
+  if(milestone) parts.push(`${topVal} 첫 도달`);
+  const bonus = chain + comboB + milestone;
+  if(bonus){
+    banner(parts.join(' · ') + ` +${bonus}`,
+           milestone ? '#ffd633' : chain ? '#8fd9ff' : '#9fe8c0',
+           milestone ? 25 : 22);
+  }
+  if(comboB) comboBlip(combo);
+  if(milestone) fanfare();
+  if(n) mergeBlip(topVal);
+  if(milestone || topVal>=512){ flashBoard(); shakeBoard(); }
+  else if(topVal>=128) shakeBoard();
 
   setTimeout(()=>{ addRandom(); render(); tagEls(); checkEnd(); }, 90);
 }
@@ -271,10 +479,10 @@ function movesAvailable(){
 function checkEnd(){
   if(!won){
     for(let r=0;r<N;r++)for(let c=0;c<N;c++) if(grid[r][c]&&grid[r][c].val>=2048){
-      won=true; showOverlay('🎉 2048 달성!', true); return;
+      won=true; flashBoard(); fanfare(); showOverlay('🎉 2048 달성!', true); return;
     }
   }
-  if(!movesAvailable()){ over=true; showOverlay('게임 오버', false); }
+  if(!movesAvailable()){ over=true; window.saveBest(); sadTone(); showOverlay('게임 오버', false); }
 }
 function showOverlay(text, keepPlaying){
   document.getElementById('overlayText').textContent = text;
@@ -287,9 +495,11 @@ function hideOverlay(){ document.getElementById('overlay').classList.remove('sho
 
 function reset(){
   grid = empty(); score=0; over=false; won=false;
+  combo = -1; reached = new Set();
   history = []; redoStack = []; updateBtns();
   document.getElementById('score').textContent = 0;
   [...tilesEl.children].forEach(el=>el.remove());
+  fxEl.innerHTML = '';
   addRandom(); addRandom(); render(); tagEls(); hideOverlay();
 }
 document.getElementById('newGame').onclick = reset;
