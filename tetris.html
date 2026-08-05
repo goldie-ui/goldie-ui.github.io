@@ -50,6 +50,12 @@
   .comboBox.hide{display:none}
   .comboBox .k{color:#ffd85b}
   .comboBox .v{color:#ffd85b; animation:comboPop .35s ease}
+  /* 지금 1등까지 얼마 남았는지. 넘어서면 금색 왕관으로 바뀐다. */
+  .chaseBox{border-top:1px solid var(--line); margin-top:4px; padding-top:5px}
+  .chaseBox.hide{display:none}
+  .chaseBox .k{color:#ffc6d6; font-size:10px}
+  .chaseBox .v{color:#ff8fb0; font-size:15px}
+  .chaseBox.won .k{color:#ffd85b} .chaseBox.won .v{color:#ffd85b}
   @keyframes comboPop{from{transform:scale(1.6)} to{transform:scale(1)}}
   .stageName{font-size:13px; font-weight:700; color:var(--accent); margin-top:2px}
   .stageBar{height:5px; background:#20233a; border-radius:99px; overflow:hidden; margin-top:7px}
@@ -234,6 +240,9 @@
       <div class="stat comboBox hide" id="comboBox">
         <span class="k">콤보</span><span class="v" id="comboVal">0</span>
       </div>
+      <div class="stat chaseBox hide" id="chaseBox">
+        <span class="k" id="chaseWho">1등</span><span class="v" id="chaseVal">0</span>
+      </div>
       <div class="stat"><span class="k">줄</span><span class="v" id="lines">0</span></div>
       <div class="stat"><span class="k">탄</span><span class="v" id="level">1</span></div>
       <div class="stageName" id="stageName">뒷마당</div>
@@ -302,19 +311,35 @@ let shakeT = 0, shakeMag = 0, groupFx = new Map(), texts = [], levelFlash = 0, b
                 This is the real pressure: it punishes slow clearing.
      iRate    – chance the all-purpose I piece survives into the bag        */
 const STAGES = [
-  {n:1, name:'뒷마당',    at:0,     gravity:800, garbage:0, rise:0,     iRate:1.00, tint:'#141626', lite:'#eef0f8', bpm:100, key:0},
-  {n:2, name:'골목길',    at:1500,  gravity:640, garbage:1, rise:0,     iRate:1.00, tint:'#151a2e', lite:'#e9eff9', bpm:110, key:2},
-  {n:3, name:'지붕 위',   at:4000,  gravity:500, garbage:2, rise:0,     iRate:0.85, tint:'#1a1630', lite:'#f0ecfa', bpm:120, key:4},
-  {n:4, name:'달빛 정원', at:8000,  gravity:390, garbage:2, rise:26000, iRate:0.75, tint:'#101c2c', lite:'#e8f1f8', bpm:130, key:5},
-  {n:5, name:'별바다',    at:14000, gravity:300, garbage:3, rise:19000, iRate:0.65, tint:'#0f1830', lite:'#e8eefb', bpm:140, key:7},
-  {n:6, name:'꿈나라',    at:22000, gravity:230, garbage:3, rise:14000, iRate:0.55, tint:'#1c1226', lite:'#f6ecf7', bpm:150, key:9},
-  {n:7, name:'별똥별',    at:32000, gravity:170, garbage:4, rise:10000, iRate:0.45, tint:'#241026', lite:'#fbecf3', bpm:162, key:11},
+  {n:1, name:'뒷마당',    at:0    ,     gravity:800, garbage:0, rise:0,     iRate:1.00, tint:'#141626', lite:'#eef0f8', bpm:100, key:0},
+  {n:2, name:'골목길',    at:10   ,  gravity:640, garbage:1, rise:0,     iRate:1.00, tint:'#151a2e', lite:'#e9eff9', bpm:110, key:2},
+  {n:3, name:'지붕 위',   at:22   ,  gravity:500, garbage:2, rise:0,     iRate:0.85, tint:'#1a1630', lite:'#f0ecfa', bpm:120, key:4},
+  {n:4, name:'달빛 정원', at:38   ,  gravity:390, garbage:2, rise:26000, iRate:0.75, tint:'#101c2c', lite:'#e8f1f8', bpm:130, key:5},
+  {n:5, name:'별바다',    at:58   , gravity:300, garbage:3, rise:19000, iRate:0.65, tint:'#0f1830', lite:'#e8eefb', bpm:140, key:7},
+  {n:6, name:'꿈나라',    at:82   , gravity:230, garbage:3, rise:14000, iRate:0.55, tint:'#1c1226', lite:'#f6ecf7', bpm:150, key:9},
+  {n:7, name:'별똥별',    at:110  , gravity:170, garbage:4, rise:10000, iRate:0.45, tint:'#241026', lite:'#fbecf3', bpm:162, key:11},
 ];
 let stage = STAGES[0], riseTimer = 0;
 // 콤보는 조각을 놓을 때마다 이어서 줄을 지운 횟수다. -1 이면 안 이어지는 중.
 // b2b 는 직전에 4줄을 만들었는지. 4줄을 연달아 내면 1.5배를 준다.
 let combo = -1, b2b = false;
+// 4줄을 몇 번 연달아 냈는지. 이어질수록 배수가 커진다.
+let b2bChain = 0;
+
+// ── 지금 1등 ─────────────────────────────────────────────────────────
+// 앱이 순위표 1등을 localStorage 에 적어 둔다(같은 사이트라 함께 쓴다).
+// 판 위에 "1등까지 얼마 남았는지"를 띄워서, 혼자 점수를 올리는 게 아니라
+// 누군가를 쫓고 있다는 게 보이게 한다.
+let topRec = null, passedTop = false;
+try {
+  const raw = localStorage.getItem('dmc_top_cattris');
+  if (raw) {
+    const o = JSON.parse(raw);
+    if (o && o.score > 0 && !o.mine) topRec = o;   // 내가 1등이면 쫓을 게 없다
+  }
+} catch(e){}
 let edgeFlash = 0;     // 크게 터졌을 때 판 테두리가 번쩍이는 정도
+let crownFx = 0;       // 1등을 넘어선 순간의 금빛 여운
 
 // 판 바탕을 밝게 할지. 어두운 판에서는 짙은 색 고양이가 배경에 묻힌다는
 // 얘기가 있어서 고를 수 있게 뒀다. 단계마다 짝이 되는 밝은 색이 있다.
@@ -333,6 +358,21 @@ function liteToggle(){
 }
 
 // 콤보가 살아 있는 동안만 옆 칸에 띄운다.
+// 1등까지 남은 점수를 옆 칸에 적는다.
+function showChase(){
+  const box = $('#chaseBox');
+  if(!box) return;
+  if(!topRec || !started || over){ box.classList.add('hide'); return; }
+  box.classList.remove('hide');
+  box.classList.toggle('won', passedTop);
+  if(passedTop){
+    $('#chaseWho').textContent = '지금';
+    $('#chaseVal').textContent = '👑 1등';
+  } else {
+    $('#chaseWho').textContent = topRec.name;      // '까지'까지 넣으면 옆 칸에서 두 줄로 접힌다
+    $('#chaseVal').textContent = (topRec.score - score).toLocaleString('ko-KR');
+  }
+}
 function showCombo(){
   const box = $('#comboBox');
   if(!box) return;
@@ -352,10 +392,34 @@ function showCombo(){
 // 일시정지인지, 게임 오버인지. 시작 단추가 무슨 일을 할지가 여기서 갈린다.
 let awaitingStage = false, pendingStage = null, overlayMode = 'start';
 
-function stageFor(sc){
+// 구간은 '지운 줄 수'로 오른다. 점수로 매기면 점수 → 구간 → 배수 →
+// 점수 로 되먹임이 생겨서 한 판에 10의 37제곱 점까지 폭주한다.
+// 줄 수는 실력과 시간에 비례해 고르게 늘어서 그런 일이 없다.
+//
+// 7탄에서 멈추지도 않는다. 예전엔 거기서 배수가 ×7 에 못박혀 아무리
+// 잘해도 점수가 더 안 올랐다. 그 뒤로는 25줄마다 한 탄씩 계속 오른다.
+const STAGE_STEP = 25;
+// 점수 배수 상한. 점수 → 구간 → 배수 → 점수 로 돌아오는 되먹임이라,
+// 여기를 안 막으면 한 판에 10의 37제곱 점까지 폭주한다. 구간 자체는
+// 계속 올라가되(더 빨라지고 방해줄도 늘고) 배수만 여기서 멈춘다.
+const MULT_CAP = 12;
+const scoreMult = () => Math.min(MULT_CAP, stage.n);
+function stageFor(ln){
   let s = STAGES[0];
-  for(const st of STAGES) if(sc >= st.at) s = st;
-  return s;
+  for(const st of STAGES) if(ln >= st.at) s = st;
+  const last = STAGES[STAGES.length-1];
+  if(s !== last) return s;
+  const extra = Math.floor((ln - last.at) / STAGE_STEP);
+  if(extra <= 0) return last;
+  const src = STAGES[(STAGES.length - 1 + extra) % STAGES.length];
+  return {
+    ...last,
+    n: last.n + extra,
+    name: src.name + ' ' + (extra + 1) + '회차',
+    tint: src.tint, lite: src.lite, key: src.key,
+    bpm: Math.min(184, last.bpm + extra * 3),
+    gravity: Math.max(85, last.gravity - extra * 10),
+  };
 }
 best = +(localStorage.getItem('cattris_best')||0);
 // 최고점은 판이 끝났을 때만 적는다. 노는 도중에 적으면 바깥 앱이 그걸
@@ -459,6 +523,12 @@ function burstRow(y){
   flashes.push({y, life:1});
 }
 function clearLines(){
+  // 지우기 전에 얼마나 높이 쌓여 있었는지 재 둔다. 위험을 안고 둔
+  // 사람에게 더 주려면 지우고 나서가 아니라 지우기 직전을 봐야 한다.
+  let topRow = ROWS;
+  for(let y=0;y<ROWS;y++) if(grid[y].some(c=>c)){ topRow = y; break; }
+  const stackH = ROWS - topRow;
+
   let cleared=0, churs=0, lowY=0;
   for(let y=ROWS-1;y>=0;y--){
     if(grid[y].every(c=>c)){
@@ -481,13 +551,31 @@ function clearLines(){
     //   올클리어— 판을 싹 비우면 크게 준다. 한 판에 한 번 나올까 말까다
     const base = [0,100,300,500,800][cleared];
     const hard = cleared === 4;
-    let gain = (hard && b2b) ? Math.round(base * 1.5) : base;
+
+    // 백투백은 이제 사슬이다. 4줄을 연달아 낼수록 배수가 계속 커진다.
+    // 예전엔 몇 번을 이어 내든 1.5배로 못박혀서, 잘하는 사람이 더 갈
+    // 데가 없었다. 여기가 점수 천장을 뚫는 첫 번째 자리다.
+    let b2bMult = 1;
+    if(hard){
+      if(b2bChain > 0) b2bMult = Math.min(3, 1 + b2bChain * 0.5);
+      b2bChain++;
+    } else {
+      b2bChain = 0;                       // 2~3줄을 내면 사슬이 끊긴다
+    }
+    let gain = Math.round(base * b2bMult);
+
     combo++;
     if(combo > 0) gain += 50 * combo;
     const allClear = grid.every(r => r.every(c => !c));
     if(allClear) gain += 2000;
-    gain *= stage.n;
-    if(churs) gain += 300 * churs * stage.n;   // 츄르 칸은 덤
+
+    // 높이 보너스 — 아슬아슬하게 쌓아 두고 지우면 더 준다. 안전하게
+    // 낮게만 유지하면 안 붙는다. 위험을 감수할 이유가 여기서 생긴다.
+    const risk = 1 + Math.min(0.6, Math.max(0, (stackH - 9) / 15));
+    if(risk > 1) gain = Math.round(gain * risk);
+
+    gain *= scoreMult();
+    if(churs) gain += 300 * churs * scoreMult();   // 츄르 칸은 덤
     b2b = hard;
     score += gain;
     showCombo();
@@ -501,6 +589,21 @@ function clearLines(){
     if(hard || allClear) edgeFlash = 1;
 
     $('#score').textContent = score; $('#lines').textContent = lines;
+    // 1등을 넘어선 그 순간. 한 판에 한 번뿐이라 크게 터뜨린다.
+    if(topRec && !passedTop && score > topRec.score){
+      passedTop = true;
+      texts.push({x:bc.width/2, y:bc.height*0.30, str:`${topRec.name} 넘었다!! 🏆`,
+                  life:1, vy:-0.5, color:'#ffd85b', size:30});
+      edgeFlash = 1; addShake(24); crownFx = 1; fanfare();
+      for(let i=0;i<40;i++){
+        const a = Math.random()*6.283, sp = 2.5 + Math.random()*5;
+        particles.push({x:bc.width/2, y:bc.height*0.42,
+          vx:Math.cos(a)*sp*CELL*0.5, vy:Math.sin(a)*sp*CELL*0.5,
+          life:1, size:CELL*0.2, color: i%2 ? '#ffd85b' : '#ff8fb0',
+          rot:Math.random()*6.3, vr:(Math.random()-0.5)*0.6, star:true});
+      }
+    }
+    showChase();          // 넘어섬 판정 뒤에 불러야 왕관으로 바뀐다
     updateStage();
     if(score>best){ best=score; $('#best').textContent = best; }
     // a meow per cleared line, staggered into a little chorus
@@ -524,10 +627,16 @@ function clearLines(){
       texts.push({x:bc.width/2, y:bc.height*0.42 + 34 + (row++)*26, str, life:1,
                   vy:-0.42, color, size});
     };
-    if(churs) { say(`츄르 ${churs}개! +${300*churs*stage.n}`, '#ffb38a', 19); churMeow(); }
-    if(hard && b2b && cleared===4) say('백투백! 1.5배', '#8fd9ff', 20);
+    if(churs) { say(`츄르 ${churs}개! +${300*churs*scoreMult()}`, '#ffb38a', 19); churMeow(); }
+    if(b2bMult > 1){
+      // 사슬이 길수록 크고 뜨겁게 보여 준다
+      const hot = b2bMult >= 3;
+      say(`백투백 ${b2bChain-1}연속! ${b2bMult}배`, hot ? '#ffa24d' : '#8fd9ff', hot ? 26 : 21);
+      if(hot) addShake(9);
+    }
+    if(risk > 1) say(`아슬아슬 ${Math.round((risk-1)*100)}%!`, '#ff8fb0', 20);
     if(combo > 0){
-      say(`${combo}콤보! +${50*combo*stage.n}`, combo>=4 ? '#ffd85b' : '#9fe8c0', combo>=4?24:19);
+      say(`${combo}콤보! +${50*combo*scoreMult()}`, combo>=4 ? '#ffd85b' : '#9fe8c0', combo>=4?24:19);
       comboBlip(combo);
     }
     if(allClear){
@@ -565,7 +674,7 @@ function applyStage(st){
 function updateStage(){
   dropInterval = Math.max(80, stage.gravity - Math.min(200, (lines*4)));
   refreshStageUI();
-  const next = stageFor(score);
+  const next = stageFor(lines);
   if(next.n > stage.n && !awaitingStage) beginStageClear(next);
 }
 function beginStageClear(next){
@@ -865,6 +974,36 @@ function draw(){
   drawTexts();
 }
 function drawTexts(){
+  // 지금 1등을 쫓는 중이면 판 위쪽에 남은 점수를 띄운다.
+  // 넘어서고 나면 왕관 띠로 바뀐다.
+  // 판 맨 위에 얇은 막대만 그린다. 글자는 조각이 내려오는 자리와 겹쳐서
+  // 옆 칸으로 뺐다(#chaseBox).
+  if(topRec && started && !over){
+    bx.save();
+    const w = bc.width;
+    if(passedTop){
+      const pulse = 0.5 + Math.sin(wagPhase*0.4)*0.3;
+      bx.fillStyle = `rgba(255,216,91,${pulse})`;
+      bx.fillRect(0, 0, w, 4);
+    } else {
+      const frac = Math.max(0, Math.min(1, score / topRec.score));
+      bx.fillStyle = 'rgba(255,255,255,.09)';
+      bx.fillRect(0, 0, w, 4);
+      bx.fillStyle = '#ff8fb0';
+      bx.fillRect(0, 0, w*frac, 4);
+    }
+    bx.restore();
+  }
+  // 1등을 넘어선 뒤로는 판 전체에 옅은 금빛이 돈다.
+  if(crownFx > 0){
+    bx.save();
+    bx.globalAlpha = crownFx * 0.28;
+    const g = bx.createLinearGradient(0,0,0,bc.height);
+    g.addColorStop(0,'#ffd85b'); g.addColorStop(1,'rgba(255,216,91,0)');
+    bx.fillStyle = g; bx.fillRect(0,0,bc.width,bc.height);
+    bx.restore();
+    crownFx = Math.max(0, crownFx - 0.012);
+  }
   // 4줄이나 올클리어처럼 크게 터졌을 때, 판 안쪽 테두리가 금빛으로 번쩍인다.
   if(edgeFlash>0){
     bx.save();
@@ -1001,7 +1140,8 @@ function tick(t){
 function startGame(){
   grid = emptyGrid();
   score=0; lines=0; over=false; paused=false; started=true;
-  combo=-1; b2b=false; edgeFlash=0; showCombo();
+  combo=-1; b2b=false; b2bChain=0; edgeFlash=0; crownFx=0; passedTop=false;
+  showCombo(); showChase();
   awaitingStage=false; pendingStage=null;
   applyStage(STAGES[0]);
   holdType=null; canHold=true; bag=[];
