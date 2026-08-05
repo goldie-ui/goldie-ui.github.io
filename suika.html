@@ -139,32 +139,32 @@ const W=cv.width, H=cv.height;
    The ladder is data, and each theme brings its own draw function, so the
    whole game can be re-skinned by switching one key. Radii and scores are
    shared: they are what the physics and the difficulty curve are tuned to. */
-// 아홉 단계.
+// 열한 단계.
 //
-// 작은 것들을 더 작게 잡았다. 초반에 판이 천천히 차야 한 판이 길어진다.
-// 대신 위로 갈수록 배율을 키워서 끝판(황금냥)은 쉽게 안 나오게 했다 —
-// 마지막 둘은 나란히 놓으면 판 가로를 거의 다 먹는다.
-const SIZES  = [10, 13, 17, 23, 31, 42, 57, 78, 106];
-const SCORES = [1, 3, 6, 11, 18, 28, 44, 70, 130];
+// 끝판(황금냥)은 좀처럼 못 보게 두는 게 이 게임의 재미다. 끝판 하나를
+// 만들려면 맨 아래 단계가 2의 10제곱, 즉 1024개 필요하다. 한 판이
+// 삼백 번쯤이라 웬만해선 닿지 않는다.
+const SIZES  = [13, 17, 22, 28, 34, 42, 51, 61, 72, 85, 100];
+const SCORES = [1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 100];
 
 const THEMES = {
   cat: {
     label:'고양이', icon:'🐱', title:'황금냥', goalWord:'황금냥',
     blurb:'고양이를 떨어뜨려 같은 냥끼리 합치세요.',
-    names:['아기냥','턱시도','치즈냥','삼색이','고등어','페르시안','샴','호랑이','황금냥'],
+    names:['아기냥','턱시도','치즈냥','삼색이','고등어','회색냥','페르시안','샴','숲냥','호랑이','황금냥'],
     cols:[['#f6d7e4','#dba9c2'], ['#5a5f72','#2f3342'], ['#ffc46b','#e09327'],
-          ['#f4e3c8','#c98f5e'], ['#8fa0bb','#5b6b86'],
-          ['#f3ece0','#cdbfa8'], ['#e8dcc6','#9c7b5c'],
+          ['#f4e3c8','#c98f5e'], ['#8fa0bb','#5b6b86'], ['#b9bdc9','#8a8f9e'],
+          ['#f3ece0','#cdbfa8'], ['#e8dcc6','#9c7b5c'], ['#c78f5c','#8a5c34'],
           ['#f2a13c','#c2701a'], ['#ffd75e','#e0a017']],
     draw: drawCat,
   },
   planet: {
     label:'행성', icon:'🪐', title:'태양', goalWord:'태양',
     blurb:'행성을 떨어뜨려 같은 것끼리 합치세요.',
-    names:['운석','달','수성','지구','화성','해왕성','토성','목성','태양'],
+    names:['운석','달','수성','금성','지구','화성','천왕성','해왕성','토성','목성','태양'],
     cols:[['#9a938c','#5f5a55'], ['#dcd8d0','#a09a92'], ['#b8a58f','#7d6e5d'],
-          ['#5aa0e0','#2c5f9e'], ['#e0724a','#a3452a'],
-          ['#5a78d8','#31479c'], ['#e0c98f','#a8905a'],
+          ['#e8c37a','#b8904a'], ['#5aa0e0','#2c5f9e'], ['#e0724a','#a3452a'],
+          ['#8fd8e0','#4f9aa8'], ['#5a78d8','#31479c'], ['#e0c98f','#a8905a'],
           ['#d9a878','#9c6f45'], ['#ffd75e','#f08c1a']],
     draw: drawPlanet,
   },
@@ -181,7 +181,10 @@ function buildLadder(){
   }));
 }
 buildLadder();
-const DROPPABLE = 5;              // only the five smallest ever fall from the top
+// 떨어지는 건 제일 작은 셋뿐이다. 다섯이던 걸 줄였다.
+// 한 번에 들어오는 재료가 줄어서 한 판이 4분에서 6분대로 늘고, 위로
+// 올라가려면 밑에서부터 차곡차곡 쌓아야 해서 끝판이 훨씬 멀어진다.
+const DROPPABLE = 3;
 const TOP = 74;                   // spawn line
 const DEAD = 108;                 // pile above this for a while = game over
 
@@ -561,7 +564,10 @@ function catMarks(ctx, r, f){
       ctx.moveTo(s*r*(k+0.18), -r*0.62); ctx.quadraticCurveTo(s*r*(k+0.42), 0, s*r*(k+0.14), r*0.62);
       ctx.stroke();
     }
-  } else if(i===5){                            // 페르시안 — 복슬복슬한 갈기
+  } else if(i===5){                            // 회색냥 — 가슴만 살짝 밝게
+    ctx.fillStyle = 'rgba(255,255,255,.35)';
+    ctx.beginPath(); ctx.ellipse(0, r*0.66, r*0.40, r*0.34, 0, 0, 6.284); ctx.fill();
+  } else if(i===6){                            // 페르시안 — 복슬복슬한 갈기
     ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = Math.max(1, r*0.05);
     for(let k=0;k<14;k++){
       const a = k/14*6.284;
@@ -570,18 +576,23 @@ function catMarks(ctx, r, f){
       ctx.lineTo(Math.cos(a)*r*0.99, Math.sin(a)*r*0.99);
       ctx.stroke();
     }
-  } else if(i===6){                            // 샴 — 얼굴 가운데가 어둡다
+  } else if(i===7){                            // 샴 — 얼굴 가운데가 어둡다
     ctx.fillStyle = 'rgba(96,70,58,.55)';
     ctx.beginPath(); ctx.ellipse(0, r*0.22, r*0.52, r*0.46, 0, 0, 6.284); ctx.fill();
     ctx.beginPath(); ctx.ellipse(0, -r*0.80, r*0.62, r*0.36, 0, 0, 6.284); ctx.fill();
-  } else if(i===7){                            // 호랑이 — 굵고 진한 줄
+  } else if(i===8){                            // 숲냥 — 목둘레 갈기
+    ctx.strokeStyle = 'rgba(255,235,200,.4)'; ctx.lineWidth = Math.max(1.2, r*0.09);
+    ctx.beginPath(); ctx.arc(0, r*0.10, r*0.80, 0.35, Math.PI-0.35); ctx.stroke();
+    ctx.lineWidth = Math.max(1, r*0.05);
+    ctx.beginPath(); ctx.arc(0, r*0.10, r*0.92, 0.5, Math.PI-0.5); ctx.stroke();
+  } else if(i===9){                            // 호랑이 — 굵고 진한 줄
     ctx.strokeStyle = 'rgba(40,26,14,.8)'; ctx.lineWidth = Math.max(1.8, r*0.13); ctx.lineCap='round';
     for(const s of [-1,1]) for(const k of [0.18,0.52,0.84]){
       ctx.beginPath();
       ctx.moveTo(s*r*k, -r*0.95); ctx.lineTo(s*r*(k+0.20), -r*0.30);
       ctx.stroke();
     }
-  } else if(i===8){                            // 황금냥 — 반짝임
+  } else if(i===10){                           // 황금냥 — 반짝임
     ctx.fillStyle = 'rgba(255,255,255,.85)';
     for(const [sx,sy,ss] of [[-0.5,-0.5,0.13],[0.55,-0.2,0.10],[0.1,0.6,0.08]]){
       ctx.beginPath();
@@ -609,7 +620,7 @@ function drawCat(ctx,x,y,r,f,rot){
   ball(ctx,r,f.c,f.c2);
   catMarks(ctx,r,f);          // 종류별 무늬. 얼굴보다 먼저 깔아야 눈코가 안 가린다
   // inner ear
-  if(r>=16){
+  if(r>=13){
     ctx.fillStyle='rgba(255,150,180,.55)';
     [[-1],[1]].forEach(([s])=>{
       ctx.beginPath();
@@ -617,15 +628,27 @@ function drawCat(ctx,x,y,r,f,rot){
       ctx.closePath(); ctx.fill();
     });
   }
-  // face
-  const eo=r*0.30, ey=-r*0.04, er=Math.max(1.2, r*0.11);
-  ctx.fillStyle='rgba(28,22,34,.88)';
-  ctx.beginPath(); ctx.ellipse(-eo,ey,er*0.85,er,0,0,6.284); ctx.fill();
-  ctx.beginPath(); ctx.ellipse( eo,ey,er*0.85,er,0,0,6.284); ctx.fill();
-  if(r>=14){
-    ctx.fillStyle='rgba(255,255,255,.9)';
-    ctx.beginPath(); ctx.arc(-eo+er*0.34, ey-er*0.36, er*0.32,0,6.284); ctx.fill();
-    ctx.beginPath(); ctx.arc( eo+er*0.34, ey-er*0.36, er*0.32,0,6.284); ctx.fill();
+  // 볼터치. 눈보다 먼저 깔아야 눈에 분홍이 안 묻는다.
+  if(r>=15){
+    ctx.fillStyle='rgba(255,140,170,.28)';
+    ctx.beginPath(); ctx.ellipse(-r*0.56, r*0.20, r*0.22, r*0.15, 0, 0, 6.284); ctx.fill();
+    ctx.beginPath(); ctx.ellipse( r*0.56, r*0.20, r*0.22, r*0.15, 0, 0, 6.284); ctx.fill();
+  }
+  // 얼굴. 눈을 크고 동그랗게 키웠다 — 작은 점보다 이쪽이 훨씬 귀엽다.
+  const eo=r*0.32, ey=-r*0.06, er=Math.max(1.3, r*0.135);
+  ctx.fillStyle='rgba(28,22,34,.9)';
+  ctx.beginPath(); ctx.ellipse(-eo,ey,er*0.88,er,0,0,6.284); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( eo,ey,er*0.88,er,0,0,6.284); ctx.fill();
+  if(r>=13){
+    // 큰 빛 하나에 작은 빛 하나. 둘이면 눈이 촉촉해 보인다.
+    ctx.fillStyle='rgba(255,255,255,.95)';
+    ctx.beginPath(); ctx.arc(-eo+er*0.30, ey-er*0.38, er*0.36,0,6.284); ctx.fill();
+    ctx.beginPath(); ctx.arc( eo+er*0.30, ey-er*0.38, er*0.36,0,6.284); ctx.fill();
+    if(r>=20){
+      ctx.fillStyle='rgba(255,255,255,.6)';
+      ctx.beginPath(); ctx.arc(-eo-er*0.32, ey+er*0.36, er*0.18,0,6.284); ctx.fill();
+      ctx.beginPath(); ctx.arc( eo-er*0.32, ey+er*0.36, er*0.18,0,6.284); ctx.fill();
+    }
   }
   if(r>=18){
     ctx.fillStyle='#ff7a9c';
@@ -668,19 +691,42 @@ function drawPlanet(ctx,x,y,r,f,rot){
     ctx.restore();
   }
   ball(ctx,r,f.c,f.c2);
-  // surface banding / craters, dropped when too small to read
-  if(r>=22){
-    ctx.save();
-    ctx.beginPath(); ctx.arc(0,0,r-1,0,6.284); ctx.clip();
+  ctx.save();
+  ctx.beginPath(); ctx.arc(0,0,r-1,0,6.284); ctx.clip();
+  // 돌덩이 셋은 곰보, 나머지는 가로줄. 작을 때는 둘 다 안 보이니 건너뛴다.
+  if(f.i<=2 && r>=14){
+    ctx.fillStyle='rgba(0,0,0,.18)';
+    for(const [cx0,cy0,cr] of [[-0.38,-0.30,0.26],[0.30,0.12,0.20],[-0.10,0.52,0.15],[0.52,-0.46,0.13]]){
+      ctx.beginPath(); ctx.arc(cx0*r, cy0*r, cr*r, 0, 6.284); ctx.fill();
+    }
+  } else if(r>=22){
     ctx.globalAlpha=.30; ctx.fillStyle=f.c2;
     for(let i=-2;i<=2;i++){
       ctx.beginPath();
       ctx.ellipse(0, i*r*0.36, r*1.1, r*0.13, 0, 0, 6.284); ctx.fill();
     }
-    ctx.globalAlpha=1; ctx.restore();
+    ctx.globalAlpha=1;
   }
+  ctx.restore();
   ctx.fillStyle='rgba(255,255,255,.30)';
   ctx.beginPath(); ctx.ellipse(-r*0.34,-r*0.40, r*0.26, r*0.17, -0.6, 0, 6.284); ctx.fill();
+  // 행성한테도 표정을 줬다. 고양이 테마에서 넘어와도 같은 게임처럼 보인다.
+  if(r>=14){
+    const eo=r*0.30, ey=r*0.02, er=Math.max(1.2, r*0.115);
+    ctx.fillStyle='rgba(24,20,30,.78)';
+    ctx.beginPath(); ctx.ellipse(-eo,ey,er*0.86,er,0,0,6.284); ctx.fill();
+    ctx.beginPath(); ctx.ellipse( eo,ey,er*0.86,er,0,0,6.284); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.9)';
+    ctx.beginPath(); ctx.arc(-eo+er*0.30, ey-er*0.36, er*0.34,0,6.284); ctx.fill();
+    ctx.beginPath(); ctx.arc( eo+er*0.30, ey-er*0.36, er*0.34,0,6.284); ctx.fill();
+    ctx.strokeStyle='rgba(24,20,30,.6)'; ctx.lineWidth=Math.max(1,r*0.038); ctx.lineCap='round';
+    ctx.beginPath(); ctx.arc(0, r*0.16, r*0.20, 0.5, Math.PI-0.5); ctx.stroke();
+    if(r>=20){
+      ctx.fillStyle='rgba(255,150,170,.24)';
+      ctx.beginPath(); ctx.ellipse(-r*0.56, r*0.26, r*0.20, r*0.13, 0, 0, 6.284); ctx.fill();
+      ctx.beginPath(); ctx.ellipse( r*0.56, r*0.26, r*0.20, r*0.13, 0, 0, 6.284); ctx.fill();
+    }
+  }
   // the sun burns rather than reflects
   if(f.gold){
     ctx.strokeStyle='rgba(255,220,120,.7)'; ctx.lineWidth=Math.max(1.5,r*0.05);
