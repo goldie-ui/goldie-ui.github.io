@@ -170,7 +170,7 @@ let FRUITS = [];
 function buildLadder(){
   const th = THEMES[themeKey];
   FRUITS = SIZES.map((r,i)=>({
-    n: th.names[i], r, score: SCORES[i],
+    n: th.names[i], r, score: SCORES[i], i,
     c: th.cols[i][0], c2: th.cols[i][1],
     gold: i===SIZES.length-1,
   }));
@@ -506,6 +506,85 @@ function ball(ctx,r,c,c2){
   ctx.strokeStyle='rgba(0,0,0,.20)'; ctx.lineWidth=Math.max(1,r*0.045);
   ctx.beginPath(); ctx.arc(0,0,r-ctx.lineWidth/2,0,6.284); ctx.stroke();
 }
+// 고양이마다 제 무늬. 이름이 전부 진짜 고양이 종류라 그걸 그대로 살렸다.
+// 색만 다르면 비슷비슷해서 어느 냥인지 구분이 안 된다 — 특히 작은 것들은
+// 색 차이가 손톱만 해서 더 그렇다. 무늬는 얼굴을 가리지 않게 머리 위쪽과
+// 옆쪽에만 넣고, 작을 때는 굵고 단순하게만 그린다.
+function catMarks(ctx, r, f){
+  const i = f.i;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(0,0,r*0.99,0,6.284); ctx.clip();   // 머리 밖으로 안 삐져나가게
+
+  const dark = 'rgba(38,30,42,.72)';
+  const white = 'rgba(255,255,255,.88)';
+
+  if(i===1){                                   // 턱시도 — 턱과 가슴이 하얗다
+    ctx.fillStyle = white;
+    ctx.beginPath();
+    ctx.ellipse(0, r*0.62, r*0.52, r*0.46, 0, 0, 6.284); ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(0, r*0.26, r*0.20, r*0.22, 0, 0, 6.284); ctx.fill();
+  } else if(i===2){                            // 치즈냥 — 이마에 줄무늬 몇 가닥
+    ctx.strokeStyle = dark; ctx.lineWidth = Math.max(1.4, r*0.10); ctx.lineCap='round';
+    for(const dx of [-0.34, 0, 0.34]){
+      ctx.beginPath();
+      ctx.moveTo(dx*r, -r*0.86); ctx.lineTo(dx*r*0.72, -r*0.42);
+      ctx.stroke();
+    }
+  } else if(i===3){                            // 삼색이 — 검정과 주황 얼룩
+    ctx.fillStyle = 'rgba(60,44,36,.75)';
+    ctx.beginPath(); ctx.ellipse(-r*0.52,-r*0.34, r*0.46, r*0.52, .4, 0, 6.284); ctx.fill();
+    ctx.fillStyle = 'rgba(240,150,60,.75)';
+    ctx.beginPath(); ctx.ellipse(r*0.50, r*0.20, r*0.44, r*0.48, -.3, 0, 6.284); ctx.fill();
+  } else if(i===4){                            // 고등어 — 옆구리로 내려오는 줄
+    ctx.strokeStyle = dark; ctx.lineWidth = Math.max(1.4, r*0.11); ctx.lineCap='round';
+    for(const s of [-1,1]) for(const k of [0.30,0.62]){
+      ctx.beginPath();
+      ctx.moveTo(s*r*(k+0.18), -r*0.62); ctx.quadraticCurveTo(s*r*(k+0.42), 0, s*r*(k+0.14), r*0.62);
+      ctx.stroke();
+    }
+  } else if(i===5){                            // 회색냥 — 가슴만 살짝 밝게
+    ctx.fillStyle = 'rgba(255,255,255,.35)';
+    ctx.beginPath(); ctx.ellipse(0, r*0.66, r*0.40, r*0.34, 0, 0, 6.284); ctx.fill();
+  } else if(i===6){                            // 페르시안 — 복슬복슬한 갈기
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = Math.max(1, r*0.05);
+    for(let k=0;k<14;k++){
+      const a = k/14*6.284;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a)*r*0.80, Math.sin(a)*r*0.80);
+      ctx.lineTo(Math.cos(a)*r*0.99, Math.sin(a)*r*0.99);
+      ctx.stroke();
+    }
+  } else if(i===7){                            // 샴 — 얼굴 가운데가 어둡다
+    ctx.fillStyle = 'rgba(96,70,58,.55)';
+    ctx.beginPath(); ctx.ellipse(0, r*0.22, r*0.52, r*0.46, 0, 0, 6.284); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -r*0.80, r*0.62, r*0.36, 0, 0, 6.284); ctx.fill();
+  } else if(i===8){                            // 숲냥 — 목둘레 갈기
+    ctx.strokeStyle = 'rgba(255,235,200,.4)'; ctx.lineWidth = Math.max(1.2, r*0.09);
+    ctx.beginPath(); ctx.arc(0, r*0.10, r*0.80, 0.35, Math.PI-0.35); ctx.stroke();
+    ctx.lineWidth = Math.max(1, r*0.05);
+    ctx.beginPath(); ctx.arc(0, r*0.10, r*0.92, 0.5, Math.PI-0.5); ctx.stroke();
+  } else if(i===9){                            // 호랑이 — 굵고 진한 줄
+    ctx.strokeStyle = 'rgba(40,26,14,.8)'; ctx.lineWidth = Math.max(1.8, r*0.13); ctx.lineCap='round';
+    for(const s of [-1,1]) for(const k of [0.18,0.52,0.84]){
+      ctx.beginPath();
+      ctx.moveTo(s*r*k, -r*0.95); ctx.lineTo(s*r*(k+0.20), -r*0.30);
+      ctx.stroke();
+    }
+  } else if(i===10){                           // 황금냥 — 반짝임
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    for(const [sx,sy,ss] of [[-0.5,-0.5,0.13],[0.55,-0.2,0.10],[0.1,0.6,0.08]]){
+      ctx.beginPath();
+      for(let k=0;k<8;k++){
+        const a=k/8*6.284, rad=(k%2? ss*0.4 : ss)*r;
+        ctx.lineTo(sx*r+Math.cos(a)*rad, sy*r+Math.sin(a)*rad);
+      }
+      ctx.closePath(); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 function drawCat(ctx,x,y,r,f,rot){
   ctx.save(); ctx.translate(x,y); ctx.rotate(rot||0);
   // ears poke out behind the head
@@ -518,6 +597,7 @@ function drawCat(ctx,x,y,r,f,rot){
     ctx.closePath(); ctx.fill();
   });
   ball(ctx,r,f.c,f.c2);
+  catMarks(ctx,r,f);          // 종류별 무늬. 얼굴보다 먼저 깔아야 눈코가 안 가린다
   // inner ear
   if(r>=16){
     ctx.fillStyle='rgba(255,150,180,.55)';
