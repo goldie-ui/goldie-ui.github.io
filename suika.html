@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/favicon.png">
+<meta name="theme-color" content="#0e0f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="골디게임">
+<title>황금수박</title>
+<style>
+  :root{
+    --bg:#0f0a14; --jar:#1a1220; --line:rgba(255,255,255,.09);
+    --text:#f3ecf5; --muted:#a898b0; --faint:#6f6278;
+    --accent:#ffc94d; --accent2:#ff7a9c;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent}
+  body{
+    font-family:"Pretendard","Apple SD Gothic Neo",-apple-system,BlinkMacSystemFont,
+      "Segoe UI",system-ui,sans-serif;
+    background:radial-gradient(700px 500px at 50% -8%,#3a1f2e 0%,transparent 60%),var(--bg);
+    color:var(--text); min-height:100vh; padding:16px 14px 30px;
+    display:flex; flex-direction:column; align-items:center;
+    user-select:none; -webkit-user-select:none;
+  }
+  .back{align-self:flex-start; color:var(--muted); text-decoration:none; font-size:14px}
+  .back:hover{color:var(--text)}
+  h1{font-size:27px; font-weight:900; letter-spacing:-.03em; margin:8px 0 2px;
+    background:linear-gradient(104deg,#fff,#ffd97a 55%,#ff9ec8);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  .sub{color:var(--faint); font-size:12px; margin-bottom:12px}
+
+  .hud{width:100%; max-width:380px; display:flex; align-items:center; gap:10px; margin-bottom:10px}
+  .score{flex:1; background:var(--jar); border:1px solid var(--line); border-radius:13px;
+    padding:8px 13px}
+  .score .k{font-size:10px; color:var(--faint); letter-spacing:.1em; text-transform:uppercase}
+  .score .v{font-size:22px; font-weight:900; font-variant-numeric:tabular-nums; line-height:1.15}
+  .nextBox{background:var(--jar); border:1px solid var(--line); border-radius:13px;
+    padding:8px 10px; display:flex; flex-direction:column; align-items:center; gap:3px}
+  .nextBox .k{font-size:10px; color:var(--faint)}
+
+  .stage{position:relative; width:100%; max-width:380px}
+  canvas{display:block; width:100%; height:auto; background:var(--jar);
+    border:1px solid var(--line); border-radius:16px; touch-action:none; cursor:pointer}
+
+  .screen{position:absolute; inset:0; border-radius:16px; z-index:5;
+    background:rgba(15,10,20,.90); backdrop-filter:blur(6px);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:13px; padding:22px; text-align:center}
+  .screen.hide{display:none}
+  .screen h2{font-size:26px; font-weight:900}
+  .screen p{color:var(--muted); font-size:13.5px; line-height:1.6}
+  .btn{background:linear-gradient(120deg,var(--accent),var(--accent2)); color:#2a1500;
+    border:none; border-radius:13px; padding:13px 32px; font-weight:900; font-size:16px;
+    cursor:pointer}
+  .btn:active{transform:scale(.97)}
+
+  /* the fruit ladder, so you can see what's coming */
+  .ladder{width:100%; max-width:380px; margin-top:12px; display:flex; flex-wrap:wrap;
+    gap:5px 7px; justify-content:center; align-items:center}
+  .ladder .f{display:flex; align-items:center; gap:4px; font-size:10.5px; color:var(--faint)}
+  .ladder .dot{border-radius:50%; display:block}
+  .ladder .arw{color:#463c4d; font-size:9px}
+  .hint{color:var(--faint); font-size:11.5px; margin-top:12px; text-align:center; line-height:1.7}
+  kbd{background:var(--jar); border:1px solid var(--line); border-radius:5px;
+    padding:1px 6px; font-size:10.5px; font-weight:700}
+
+  @media (max-width:640px){
+    /* size the jar by height so the ladder and hint still fit under it */
+    .stage{width:fit-content; max-width:100%; margin:0 auto}
+    #cv{height:min(57vh, 540px); width:auto; max-width:100%}
+    body{padding:12px 12px 16px}
+    h1{font-size:23px; margin:6px 0 1px}
+    .sub{font-size:11px; margin-bottom:9px}
+    .hud{margin-bottom:8px}
+    .score{padding:6px 11px}
+    .score .v{font-size:19px}
+    .ladder{margin-top:8px; gap:3px 5px}
+    .ladder .f{font-size:9.5px}
+    .hint{margin-top:8px; font-size:11px}
+  }
+  @media (max-height:560px) and (orientation:landscape){
+    body{flex-direction:row; align-items:center; justify-content:center; gap:14px; padding:8px}
+    h1,.sub,.hint,.ladder{display:none}
+    .back{position:absolute; top:6px; left:10px; font-size:12px}
+    .stage{max-width:none; height:calc(100vh - 20px); width:auto}
+    canvas{height:100%; width:auto}
+    .hud{flex-direction:column; width:auto; max-width:none; margin:0}
+  }
+</style>
+</head>
+<body>
+<a class="back" href="index.html">← 골디 게임</a>
+<h1>🍉 황금수박</h1>
+<div class="sub">같은 과일끼리 합쳐서 황금수박까지</div>
+
+<div class="hud">
+  <div class="score"><div class="k">점수</div><div class="v" id="score">0</div></div>
+  <div class="score"><div class="k">최고</div><div class="v" id="best">0</div></div>
+  <div class="nextBox"><div class="k">다음</div><canvas id="next" width="52" height="52"></canvas></div>
+</div>
+
+<div class="stage">
+  <canvas id="cv" width="380" height="540"></canvas>
+  <div class="screen" id="startScreen">
+    <h2>🍉 황금수박</h2>
+    <p>과일을 떨어뜨려 같은 것끼리 합치세요.<br>통 밖으로 넘치면 끝이에요.</p>
+    <button class="btn" id="startBtn">시작</button>
+  </div>
+  <div class="screen hide" id="overScreen">
+    <h2 id="overTitle">가득 찼어요!</h2>
+    <p id="overText"></p>
+    <button class="btn" id="retryBtn">다시 하기</button>
+  </div>
+</div>
+
+<div class="ladder" id="ladder"></div>
+<p class="hint">
+  손가락으로 <b>좌우로 움직이고 떼면</b> 떨어져요 · 컴퓨터는 <kbd>←</kbd><kbd>→</kbd> 이동, <kbd>Space</kbd> 놓기
+</p>
+
+<script>
+const cv=document.getElementById('cv'), cx=cv.getContext('2d');
+const nx=document.getElementById('next'), nctx=nx.getContext('2d');
+const $=s=>document.querySelector(s);
+const W=cv.width, H=cv.height;
+
+/* ---------------- fruit ladder ---------------- */
+const FRUITS = [
+  {n:'블루베리', r:12,  c:'#6f7fd6', c2:'#4a58a8', score:1},
+  {n:'체리',     r:16,  c:'#e0405a', c2:'#a82238', score:3},
+  {n:'포도',     r:21,  c:'#9a5cc9', c2:'#6c3a94', score:6},
+  {n:'귤',       r:27,  c:'#ffa63d', c2:'#d97a15', score:10},
+  {n:'사과',     r:34,  c:'#e8443c', c2:'#a82420', score:15},
+  {n:'배',       r:42,  c:'#d6d066', c2:'#a39a38', score:21},
+  {n:'복숭아',   r:51,  c:'#ff9db0', c2:'#e06a86', score:28},
+  {n:'파인애플', r:61,  c:'#f2c53d', c2:'#c2941a', score:36},
+  {n:'메론',     r:72,  c:'#8fd66a', c2:'#5fa441', score:45},
+  {n:'수박',     r:85,  c:'#3fa050', c2:'#266b33', score:55},
+  {n:'황금수박', r:100, c:'#ffd34d', c2:'#e0a017', score:100, gold:true},
+];
+const DROPPABLE = 5;              // only the five smallest ever fall from the top
+const TOP = 74;                   // spawn line
+const DEAD = 108;                 // pile above this for a while = game over
+
+/* ---------------- physics ----------------
+   Impulse-based circles: integrate, then relax overlaps a few times per step.
+   Several substeps keep a tall pile from jittering itself apart.            */
+const GRAV=2100, REST=0.12, FRICT=0.986, SUB=4, ITER=4;
+let bodies=[], seq=0;
+
+function addBody(x,y,type,vx=0,vy=0){
+  const f=FRUITS[type];
+  bodies.push({id:++seq, x, y, vx, vy, r:f.r, type, rot:Math.random()*6.3, vrot:0,
+               age:0, pop:0, merged:false});
+  return bodies[bodies.length-1];
+}
+function stepPhysics(dt){
+  const h=dt/SUB;
+  for(const b of bodies){ b._px=b.x; b._py=b.y; }
+  for(let s=0;s<SUB;s++){
+    for(const b of bodies){
+      b.vy += GRAV*h;
+      b.x += b.vx*h; b.y += b.vy*h;
+      b.vx *= FRICT; b.vy *= FRICT;
+      b.rot += b.vrot*h; b.vrot *= 0.94;
+      b.age += h;
+    }
+    for(let it=0; it<ITER; it++){
+      // walls and floor
+      for(const b of bodies){
+        if(b.x-b.r < 0){ b.x=b.r; if(b.vx<0){ b.vx=-b.vx*REST; b.vrot += b.vy*0.004; } }
+        if(b.x+b.r > W){ b.x=W-b.r; if(b.vx>0){ b.vx=-b.vx*REST; b.vrot -= b.vy*0.004; } }
+        if(b.y+b.r > H){ b.y=H-b.r; if(b.vy>0){ b.vy=-b.vy*REST; b.vx*=0.90; b.vrot=b.vx*0.02; } }
+      }
+      // pairs
+      for(let i=0;i<bodies.length;i++){
+        const a=bodies[i];
+        for(let j=i+1;j<bodies.length;j++){
+          const b=bodies[j];
+          let dx=b.x-a.x, dy=b.y-a.y;
+          const rr=a.r+b.r;
+          let d2=dx*dx+dy*dy;
+          if(d2 >= rr*rr || d2===0) continue;
+          let d=Math.sqrt(d2);
+          const nxv=dx/d, nyv=dy/d, pen=rr-d;
+          // heavier fruit moves less
+          const ma=a.r*a.r, mb=b.r*b.r, tot=ma+mb;
+          const pa=pen*(mb/tot), pb=pen*(ma/tot);
+          a.x-=nxv*pa; a.y-=nyv*pa;
+          b.x+=nxv*pb; b.y+=nyv*pb;
+          // bounce along the contact normal
+          const rvx=b.vx-a.vx, rvy=b.vy-a.vy;
+          const vn=rvx*nxv+rvy*nyv;
+          if(vn<0){
+            const imp=-(1+REST)*vn/(1/ma+1/mb);
+            a.vx-=imp*nxv/ma; a.vy-=imp*nyv/ma;
+            b.vx+=imp*nxv/mb; b.vy+=imp*nyv/mb;
+            const spin=(rvx*-nyv+rvy*nxv)*0.02;
+            a.vrot-=spin; b.vrot+=spin;
+          }
+        }
+      }
+    }
+  }
+  // A resting body keeps collecting gravity every substep while its contact
+  // never pushes back (approach speed is ~0, so no impulse fires). Position
+  // stays put but velocity creeps up, which made "is it settled?" unanswerable
+  // from velocity alone. Judge rest by how far it actually moved, and bleed
+  // off that phantom energy so piles genuinely go quiet.
+  for(const b of bodies){
+    b.moved = Math.hypot(b.x-b._px, b.y-b._py);
+    if(b.moved < 0.55){
+      b.rest = (b.rest||0) + dt;
+      if(b.rest > 0.12){ b.vx*=0.35; b.vy*=0.35; b.vrot*=0.5; }
+    } else b.rest = 0;
+  }
+}
+/* merge any touching same-type pair; chains happen naturally next frame */
+function resolveMerges(){
+  for(let i=0;i<bodies.length;i++){
+    const a=bodies[i]; if(a.merged) continue;
+    for(let j=i+1;j<bodies.length;j++){
+      const b=bodies[j]; if(b.merged || b.type!==a.type) continue;
+      const dx=b.x-a.x, dy=b.y-a.y, rr=a.r+b.r;
+      if(dx*dx+dy*dy > rr*rr*1.02) continue;
+      a.merged=b.merged=true;
+      const t=a.type;
+      if(t < FRUITS.length-1){
+        const nb=addBody((a.x+b.x)/2, (a.y+b.y)/2, t+1,
+                         (a.vx+b.vx)/2, (a.vy+b.vy)/2);
+        nb.pop=1;
+        score += FRUITS[t+1].score;
+        if(t+1===FRUITS.length-1 && !madeGold){ madeGold=true; goldFlash=1; fanfare(); }
+        burst(nb.x, nb.y, FRUITS[t+1], nb.r);
+        pling(t+1);
+      } else {
+        // two golden watermelons cancel out — a big bonus and space back
+        score += 500; burst(a.x,a.y,FRUITS[t],a.r*1.3); fanfare();
+      }
+      break;
+    }
+  }
+  if(bodies.some(b=>b.merged)) bodies = bodies.filter(b=>!b.merged);
+}
+
+/* ---------------- audio ---------------- */
+let ac=null;
+function actx(){
+  if(!ac){ const A=window.AudioContext||window.webkitAudioContext; if(!A) return null; ac=new A(); }
+  if(ac.state==='suspended') ac.resume();
+  return ac;
+}
+const midi=m=>440*Math.pow(2,(m-69)/12);
+function pling(level){
+  const a=actx(); if(!a) return;
+  const t=a.currentTime;
+  // bigger fruit, lower and rounder note
+  const m = 84 - level*3;
+  [[0,'triangle',0.16],[12,'sine',0.07]].forEach(([off,type,vol])=>{
+    const o=a.createOscillator(), g=a.createGain();
+    o.type=type; o.frequency.value=midi(m+off);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.34);
+    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+0.36);
+  });
+}
+function thud(strength){
+  const a=actx(); if(!a) return;
+  const t=a.currentTime, v=Math.min(0.14, 0.03+strength*0.00012);
+  const o=a.createOscillator(), g=a.createGain();
+  o.type='sine';
+  o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(60,t+0.10);
+  g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.14);
+  o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+0.16);
+}
+function fanfare(){
+  const a=actx(); if(!a) return;
+  [0,4,7,12].forEach((s,i)=>{
+    const t=a.currentTime+i*0.09;
+    const o=a.createOscillator(), g=a.createGain();
+    o.type='triangle'; o.frequency.value=midi(72+s);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.18,t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.42);
+    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+0.44);
+  });
+}
+function silence(){ if(ac){ try{ac.close();}catch(e){} ac=null; } }
+
+/* ---------------- particles ---------------- */
+let parts=[], goldFlash=0;
+function burst(x,y,f,r){
+  const n=Math.min(26, 8+Math.round(r/4));
+  for(let i=0;i<n;i++){
+    const a=Math.random()*6.283, sp=40+Math.random()*160;
+    parts.push({x,y,vx:Math.cos(a)*sp, vy:Math.sin(a)*sp-40,
+                life:1, size:2+Math.random()*(r*0.10), c: Math.random()<0.5?f.c:f.c2});
+  }
+}
+
+/* ---------------- game state ---------------- */
+let score=0, best=+(localStorage.getItem('suika_best')||0);
+let cursor=W/2, current=null, nextType=0, dropLock=0;
+let playing=false, over=false, madeGold=false, overTimer=0, raf=null, lastT=0;
+$('#best').textContent=best;
+
+function rollType(){ return Math.floor(Math.random()*DROPPABLE); }
+function newGame(){
+  bodies=[]; parts=[]; score=0; over=false; madeGold=false; overTimer=0;
+  goldFlash=0; dropLock=0; cursor=W/2;
+  current=rollType(); nextType=rollType();
+  playing=true;
+  $('#score').textContent=0;
+  $('#startScreen').classList.add('hide');
+  $('#overScreen').classList.add('hide');
+  drawNext();
+  lastT=0;
+  if(!raf) raf=requestAnimationFrame(loop);
+}
+function drop(){
+  if(!playing || over || current===null || dropLock>0) return;
+  const f=FRUITS[current];
+  const x=Math.max(f.r+2, Math.min(W-f.r-2, cursor));
+  const b=addBody(x, TOP, current, 0, 60);
+  b.age=0;
+  current=nextType; nextType=rollType();
+  dropLock=0.34;
+  drawNext();
+  thud(60);
+}
+
+/* ---------------- drawing ---------------- */
+function fruitPath(ctx,x,y,r,f,rot){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(rot||0);
+  const g=ctx.createRadialGradient(-r*0.32,-r*0.36,r*0.08, 0,0,r);
+  g.addColorStop(0, f.c); g.addColorStop(1, f.c2);
+  ctx.fillStyle=g;
+  ctx.beginPath(); ctx.arc(0,0,r,0,6.284); ctx.fill();
+  // rim
+  ctx.strokeStyle='rgba(0,0,0,.22)'; ctx.lineWidth=Math.max(1,r*0.05);
+  ctx.beginPath(); ctx.arc(0,0,r-ctx.lineWidth/2,0,6.284); ctx.stroke();
+  // watermelon stripes
+  if(r>=80){
+    ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=r*0.10;
+    for(let i=-2;i<=2;i++){
+      ctx.beginPath();
+      ctx.ellipse(0,0, r*0.95, r*0.30*Math.abs(i||0.5), i*0.5, 0, 6.284);
+      ctx.stroke();
+    }
+  }
+  // highlight
+  ctx.fillStyle='rgba(255,255,255,.34)';
+  ctx.beginPath(); ctx.ellipse(-r*0.34,-r*0.40, r*0.26, r*0.17, -0.6, 0, 6.284); ctx.fill();
+  // stem + leaf once it's big enough to read
+  if(r>=20){
+    ctx.strokeStyle='rgba(60,40,20,.75)'; ctx.lineWidth=Math.max(1.5,r*0.07); ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(0,-r*0.92); ctx.lineTo(r*0.06,-r*1.10); ctx.stroke();
+    ctx.fillStyle='#5fae52';
+    ctx.beginPath();
+    ctx.ellipse(r*0.24,-r*1.06, r*0.20, r*0.10, -0.5, 0, 6.284); ctx.fill();
+  }
+  // a face on the golden watermelon, because it's the goal
+  if(f.gold){
+    ctx.fillStyle='rgba(70,45,0,.85)';
+    ctx.beginPath(); ctx.arc(-r*0.26,-r*0.06, r*0.075,0,6.284); ctx.fill();
+    ctx.beginPath(); ctx.arc( r*0.26,-r*0.06, r*0.075,0,6.284); ctx.fill();
+    ctx.strokeStyle='rgba(70,45,0,.85)'; ctx.lineWidth=r*0.055; ctx.lineCap='round';
+    ctx.beginPath(); ctx.arc(0, r*0.02, r*0.30, 0.45, 2.69); ctx.stroke();
+  }
+  ctx.restore();
+}
+function draw(){
+  cx.clearRect(0,0,W,H);
+  if(goldFlash>0){
+    cx.fillStyle=`rgba(255,211,77,${goldFlash*0.30})`;
+    cx.fillRect(0,0,W,H);
+  }
+  // danger line
+  const danger = bodies.some(b=>b.age>0.6 && b.y-b.r < DEAD);
+  cx.strokeStyle = danger ? 'rgba(255,110,140,'+(0.45+0.35*Math.sin(Date.now()/120))+')'
+                          : 'rgba(255,255,255,.13)';
+  cx.lineWidth=2; cx.setLineDash([7,7]);
+  cx.beginPath(); cx.moveTo(0,DEAD); cx.lineTo(W,DEAD); cx.stroke();
+  cx.setLineDash([]);
+
+  for(const b of bodies){
+    const f=FRUITS[b.type];
+    let r=b.r;
+    if(b.pop>0){ r = b.r*(1 + Math.sin(b.pop*Math.PI)*0.22); b.pop-=0.06; }
+    fruitPath(cx, b.x, b.y, r, f, b.rot);
+  }
+  // the fruit waiting to fall, plus its drop guide
+  if(playing && !over && current!==null){
+    const f=FRUITS[current];
+    const x=Math.max(f.r+2, Math.min(W-f.r-2, cursor));
+    cx.save(); cx.globalAlpha=0.20; cx.strokeStyle=f.c; cx.lineWidth=2;
+    cx.setLineDash([5,8]);
+    cx.beginPath(); cx.moveTo(x,TOP+f.r); cx.lineTo(x,H); cx.stroke();
+    cx.restore();
+    cx.save();
+    if(dropLock>0) cx.globalAlpha=0.45;
+    fruitPath(cx, x, TOP, f.r, f, 0);
+    cx.restore();
+  }
+  // particles
+  parts.forEach(p=>{
+    cx.globalAlpha=Math.max(0,p.life);
+    cx.fillStyle=p.c;
+    cx.beginPath(); cx.arc(p.x,p.y,p.size,0,6.284); cx.fill();
+  });
+  cx.globalAlpha=1;
+}
+function drawNext(){
+  nctx.clearRect(0,0,nx.width,nx.height);
+  const f=FRUITS[nextType];
+  const r=Math.min(20, f.r);
+  fruitPath(nctx, nx.width/2, nx.height/2, r, f, 0);
+}
+
+/* ---------------- loop ---------------- */
+function loop(ts){
+  raf=requestAnimationFrame(loop);
+  const dt=lastT ? Math.min(0.033,(ts-lastT)/1000) : 0.016;
+  lastT=ts;
+  if(playing && !over){
+    if(dropLock>0) dropLock-=dt;
+    stepPhysics(dt);
+    resolveMerges();
+    // Overflow is measured as time spent above the line, not stillness: a jar
+    // packed to the brim keeps slowly rearranging and never reads as "at rest",
+    // so a stillness test would let an overflowing pile play on forever. A
+    // dropped fruit only passes through the zone for a few tenths of a second,
+    // well under the limit.
+    let worst = 0;
+    for(const b of bodies){
+      if(b.age > 0.5 && b.y - b.r < DEAD) b.overTime = (b.overTime||0) + dt;
+      else b.overTime = 0;
+      if(b.overTime > worst) worst = b.overTime;
+    }
+    overTimer = worst;
+    if(worst > 2.0) gameOver();
+    $('#score').textContent = score.toLocaleString();
+  }
+  parts.forEach(p=>{ p.vy+=900*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*1.5; });
+  if(parts.length) parts=parts.filter(p=>p.life>0);
+  if(goldFlash>0) goldFlash=Math.max(0,goldFlash-dt*1.6);
+  draw();
+}
+function gameOver(){
+  over=true; playing=false;
+  if(score>best){ best=score; localStorage.setItem('suika_best',best); $('#best').textContent=best; }
+  const biggest=bodies.reduce((m,b)=>Math.max(m,b.type),0);
+  $('#overTitle').textContent = madeGold ? '황금수박 달성! 🏆' : '가득 찼어요!';
+  $('#overText').innerHTML =
+    `점수 <b>${score.toLocaleString()}</b> · 가장 큰 과일 <b>${FRUITS[biggest].n}</b>` +
+    (score>=best && score>0 ? '<br>🎉 최고 기록!' : '');
+  $('#overScreen').classList.remove('hide');
+}
+
+/* ---------------- input ---------------- */
+function xFromEvent(e){
+  const r=cv.getBoundingClientRect();
+  return (e.clientX-r.left)/r.width*W;
+}
+let aiming=false;
+cv.addEventListener('pointerdown', e=>{
+  if(!playing||over) return;
+  e.preventDefault(); aiming=true; cursor=xFromEvent(e);
+});
+cv.addEventListener('pointermove', e=>{
+  if(!playing||over) return;
+  if(aiming || e.pointerType==='mouse') cursor=xFromEvent(e);
+});
+cv.addEventListener('pointerup', e=>{
+  if(!playing||over) return;
+  if(aiming){ cursor=xFromEvent(e); drop(); }
+  aiming=false;
+});
+cv.addEventListener('pointercancel', ()=>{ aiming=false; });
+addEventListener('keydown', e=>{
+  if(!playing||over){
+    if(e.code==='Space'||e.key==='Enter'){ e.preventDefault(); newGame(); }
+    return;
+  }
+  const step=18;
+  if(e.key==='ArrowLeft'||e.key==='a'){ cursor=Math.max(0,cursor-step); e.preventDefault(); }
+  else if(e.key==='ArrowRight'||e.key==='d'){ cursor=Math.min(W,cursor+step); e.preventDefault(); }
+  else if(e.code==='Space'||e.key==='ArrowDown'){ e.preventDefault(); drop(); }
+});
+$('#startBtn').onclick=newGame;
+$('#retryBtn').onclick=newGame;
+addEventListener('pagehide', silence);
+addEventListener('beforeunload', silence);
+
+/* ladder strip under the board */
+(function(){
+  const el=$('#ladder');
+  FRUITS.forEach((f,i)=>{
+    if(i) { const s=document.createElement('span'); s.className='arw'; s.textContent='▸'; el.appendChild(s); }
+    const d=document.createElement('span'); d.className='f';
+    const dot=document.createElement('span'); dot.className='dot';
+    const px=Math.round(7+i*1.1);
+    dot.style.width=dot.style.height=px+'px';
+    dot.style.background=f.c;
+    d.appendChild(dot);
+    const t=document.createElement('span'); t.textContent=f.n; d.appendChild(t);
+    el.appendChild(d);
+  });
+})();
+drawNext(); draw();
+</script>
+</body>
+</html>
