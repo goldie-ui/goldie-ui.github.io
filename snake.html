@@ -508,7 +508,11 @@ const keymap = {ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r',
 window.addEventListener('keydown', e=>{
   if(e.code==='Space'){ e.preventDefault();
     if(!started||!alive){ start(); } else togglePause(); return; }
-  const nd = keymap[e.key];
+  // 한글 입력 상태에서는 e.key 가 'ㅁ','ㄴ' 처럼 들어와서 WASD 가 안 먹는다.
+  // e.code 는 자판의 물리적 위치라 한글이든 영문이든 늘 같다.
+  const byCode = {ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r',
+                  KeyW:'u',KeyS:'d',KeyA:'l',KeyD:'r'};
+  const nd = byCode[e.code] || keymap[e.key];
   if(nd){ e.preventDefault(); setDir(nd); }
 });
 $('#startBtn').onclick = ()=>{ if(paused){ togglePause(); } else start(); };

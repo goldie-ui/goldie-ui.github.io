@@ -512,11 +512,15 @@ document.getElementById('retry').onclick = function(){
 const keymap = {ArrowLeft:'l',ArrowRight:'r',ArrowUp:'u',ArrowDown:'d',
   a:'l',d:'r',w:'u',s:'d',A:'l',D:'r',W:'u',S:'d'};
 window.addEventListener('keydown', e=>{
-  if(e.key==='z' || e.key==='Z' || (e.key==='Backspace' && e.target.tagName!=='INPUT')){
+  // 한글 입력 상태에서는 e.key 가 'ㅋ','ㅛ' 처럼 들어와서 Z·Y·WASD 가
+  // 안 먹는다. e.code 는 자판의 물리적 위치라 늘 같다.
+  if(e.code==='KeyZ' || (e.code==='Backspace' && e.target.tagName!=='INPUT')){
     e.preventDefault(); undo(); return;
   }
-  if(e.key==='y' || e.key==='Y'){ e.preventDefault(); redo(); return; }
-  const dir = keymap[e.key];
+  if(e.code==='KeyY'){ e.preventDefault(); redo(); return; }
+  const byCode = {ArrowLeft:'l',ArrowRight:'r',ArrowUp:'u',ArrowDown:'d',
+                  KeyA:'l',KeyD:'r',KeyW:'u',KeyS:'d'};
+  const dir = byCode[e.code] || keymap[e.key];
   if(dir){ e.preventDefault(); move(dir); }
 });
 
