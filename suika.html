@@ -474,7 +474,14 @@ function newGame(){
 function drop(){
   if(!playing || over || current===null || dropLock>0) return;
   const f=FRUITS[current];
-  const x=Math.max(f.r+2, Math.min(W-f.r-2, cursor));
+  // 손끝을 아주 살짝 떨게 둔다.
+  //
+  // 딱 한가운데로만 계속 놓으면 닿는 면이 정확히 위아래라 옆으로 미는
+  // 힘이 아예 안 생긴다. 그래서 동그란 것들이 젓가락처럼 일직선으로
+  // 서 버리고 영영 안 무너졌다. 0.35픽셀만 어긋나도 탑은 제대로
+  // 무너진다 — 380픽셀 판에서 이 정도는 조준에 아무 영향이 없다.
+  const jitter = (Math.random()*2-1)*0.35;
+  const x=Math.max(f.r+2, Math.min(W-f.r-2, cursor+jitter));
   const b=addBody(x, TOP, current, 0, 60);
   b.age=0;
   dropped++;
