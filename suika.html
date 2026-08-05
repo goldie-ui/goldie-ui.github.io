@@ -251,6 +251,18 @@ function stepPhysics(dt){
               a.vrot-=spin; b.vrot+=spin;
             }
           }
+          // Rolling. Sliding along a contact should turn the piece, which is
+          // what selling "it tumbled off" depends on. Blend toward rolling
+          // without slipping (w = v_t / r) rather than setting it outright, so
+          // a resting stack doesn't twitch.
+          // The threshold must clear the phantom velocity a parked body carries,
+          // or resting pieces get "rolled" by their own noise — that is what put
+          // the spin-in-place back. Parked pieces are skipped outright.
+          const vt = (b.vx-a.vx)*-nyv + (b.vy-a.vy)*nxv;
+          if(Math.abs(vt) > 60){
+            if((a.rest||0) < 0.3) a.vrot += (-vt/a.r - a.vrot)*0.12;
+            if((b.rest||0) < 0.3) b.vrot += ( vt/b.r - b.vrot)*0.12;
+          }
         }
       }
     }
@@ -262,11 +274,13 @@ function stepPhysics(dt){
   // off that phantom energy so piles genuinely go quiet.
   for(const b of bodies){
     b.moved = Math.hypot(b.x-b._px, b.y-b._py);
-    if(b.moved < 0.4){
+    // This threshold decides what counts as "not moving". Set too high it eats
+    // slow slides: a piece starting to roll off a shoulder creeps a few px per
+    // frame, got read as settled, and was damped to a stop mid-slide — which is
+    // why nothing ever tumbled. Only genuinely parked pieces get damped now.
+    if(b.moved < 0.12){
       b.rest = (b.rest||0) + dt;
-      // wait longer and damp gentler than before, so a pile settles instead of
-      // freezing the instant it touches down
-      if(b.rest > 0.25){ b.vx*=0.6; b.vy*=0.6; b.vrot = 0; }
+      if(b.rest > 0.5){ b.vx*=0.85; b.vy*=0.85; b.vrot = 0; }
     } else b.rest = 0;
   }
 }
@@ -363,7 +377,10 @@ function silence(){ if(ac){ try{ac.close();}catch(e){} ac=null; } }
 /* ---------------- scoring extras ----------------
    Two things reward playing well rather than merely playing long: cascades
    set off by one drop, and how many pieces you survive. */
-const CHAIN_MULT=[1, 1.5, 2, 3, 4, 6, 8];
+// Kept deliberately modest. At up to 8x a single lucky cascade outweighed a
+// whole game of careful play — measured best and random play scoring dead
+// level. A chain should feel good, not decide the match.
+const CHAIN_MULT=[1, 1.25, 1.5, 1.8, 2.1, 2.5];
 const SURVIVE_STEP=25;                       // a bonus every N pieces dropped
 let chain=0, chainTimer=0, chainBest=0, chainFlash=0;
 let dropped=0, nextMilestone=SURVIVE_STEP;
