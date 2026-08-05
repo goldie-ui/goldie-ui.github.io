@@ -206,9 +206,11 @@ function stepPhysics(dt){
     for(let it=0; it<ITER; it++){
       // walls and floor
       for(const b of bodies){
-        if(b.x-b.r < 0){ b.x=b.r; if(b.vx<0){ b.vx=-b.vx*REST; b.vrot += b.vy*0.004; } }
-        if(b.x+b.r > W){ b.x=W-b.r; if(b.vx>0){ b.vx=-b.vx*REST; b.vrot -= b.vy*0.004; } }
-        if(b.y+b.r > H){ b.y=H-b.r; if(b.vy>0){ b.vy=-b.vy*REST; b.vx*=0.90; b.vrot=b.vx*0.02; } }
+        // walls and floor impart spin only on a genuine impact, for the same
+        // reason as the pair contacts above
+        if(b.x-b.r < 0){ b.x=b.r; if(b.vx<0){ if(-b.vx>55) b.vrot += b.vy*0.004; b.vx=-b.vx*REST; } }
+        if(b.x+b.r > W){ b.x=W-b.r; if(b.vx>0){ if(b.vx>55) b.vrot -= b.vy*0.004; b.vx=-b.vx*REST; } }
+        if(b.y+b.r > H){ b.y=H-b.r; if(b.vy>0){ if(b.vy>55) b.vrot=b.vx*0.02; b.vy=-b.vy*REST; b.vx*=0.90; } }
       }
       // pairs
       for(let i=0;i<bodies.length;i++){
@@ -233,8 +235,16 @@ function stepPhysics(dt){
             const imp=-(1+REST)*vn/(1/ma+1/mb);
             a.vx-=imp*nxv/ma; a.vy-=imp*nyv/ma;
             b.vx+=imp*nxv/mb; b.vy+=imp*nyv/mb;
-            const spin=(rvx*-nyv+rvy*nxv)*0.02;
-            a.vrot-=spin; b.vrot+=spin;
+            // Only a real impact should impart spin. Resting neighbours still
+            // carry the phantom gravity velocity, and without this gate they
+            // fed each other spin 16x a frame — faster than damping removed it,
+            // so settled pieces rotated on the spot forever. Position never
+            // showed it because positional correction pins that; nothing pins
+            // the angle.
+            if(-vn > 55){
+              const spin=(rvx*-nyv+rvy*nxv)*0.02;
+              a.vrot-=spin; b.vrot+=spin;
+            }
           }
         }
       }
@@ -249,7 +259,7 @@ function stepPhysics(dt){
     b.moved = Math.hypot(b.x-b._px, b.y-b._py);
     if(b.moved < 0.55){
       b.rest = (b.rest||0) + dt;
-      if(b.rest > 0.12){ b.vx*=0.35; b.vy*=0.35; b.vrot*=0.5; }
+      if(b.rest > 0.12){ b.vx*=0.35; b.vy*=0.35; b.vrot = 0; }
     } else b.rest = 0;
   }
 }
