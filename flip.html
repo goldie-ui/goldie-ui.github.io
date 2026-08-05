@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/favicon.png">
+<meta name="theme-color" content="#0e0f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="골디게임">
+<title>츄르런</title>
+<style>
+  :root{
+    --bg:#0e0f1a; --board:#181a2b; --text:#e8e9f3; --muted:#9aa0c0;
+    --accent:#7c6cff; --accent2:#ff6ca8; --green:#3ddc97; --line:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    background:radial-gradient(900px 600px at 50% -10%,#241a3d 0%,transparent 55%),var(--bg);
+    color:var(--text); min-height:100vh; padding:26px 16px 50px;
+    display:flex; flex-direction:column; align-items:center}
+  .top{width:100%; max-width:440px; display:flex; justify-content:space-between;
+    align-items:flex-end; margin:0 0 14px}
+  h1{font-size:40px; font-weight:900; letter-spacing:-2px;
+    background:linear-gradient(120deg,#fff,#b9b0ff,#ff6ca8);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  .scores{display:flex; gap:10px}
+  .score{background:var(--board); border:1px solid var(--line); border-radius:12px;
+    padding:8px 16px; text-align:center; min-width:78px}
+  .score .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px}
+  .score .val{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
+  .board-wrap{position:relative; width:100%; max-width:440px}
+  canvas{width:100%; height:auto; background:var(--board); border-radius:18px;
+    display:block; touch-action:none}
+  .overlay{position:absolute; inset:0; background:rgba(14,15,26,.84); border-radius:18px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+    backdrop-filter:blur(4px); z-index:5; text-align:center; padding:22px}
+  .overlay.hide{display:none}
+  .overlay h2{font-size:32px; font-weight:900}
+  .overlay p{color:var(--muted); font-size:15px; line-height:1.65}
+  .overlay .big{font-size:52px; font-weight:900; font-variant-numeric:tabular-nums;
+    background:linear-gradient(120deg,#fff,#b9b0ff); -webkit-background-clip:text;
+    background-clip:text; -webkit-text-fill-color:transparent; line-height:1}
+  .overlay button{background:linear-gradient(120deg,var(--accent),var(--accent2)); color:#fff;
+    border:none; border-radius:12px; padding:13px 32px; font-weight:700; font-size:16px;
+    cursor:pointer; margin-top:4px}
+  .newbest{color:var(--green); font-weight:800; font-size:14px}
+  /* 소리 끄개. 판 구석에 얹어서 자리를 안 먹게 한다. */
+  #soundBtn{position:absolute; top:10px; right:10px; z-index:6;
+    width:34px; height:34px; display:grid; place-items:center; padding:0;
+    background:rgba(24,26,43,.72); border:1px solid var(--line); border-radius:10px;
+    color:var(--muted); cursor:pointer}
+  #soundBtn svg{width:19px; height:19px}
+  #soundBtn .cross{display:none}
+  #soundBtn.off{color:#6a6f90}
+  #soundBtn.off .wave{display:none}
+  #soundBtn.off .cross{display:block}
+  .legend{display:flex; gap:16px; justify-content:center; margin-top:2px}
+  .legend div{font-size:12px; color:var(--muted); display:flex; flex-direction:column;
+    align-items:center; gap:5px}
+  .legend b{font-size:13px; color:var(--text)}
+  .hint{color:var(--muted); font-size:13px; margin-top:16px; text-align:center; line-height:1.6}
+
+  /* 폰에서는 스크롤 없이 한 화면에. 앱 안에서는 위 막대만큼 더 좁아지니
+     남는 높이에 맞춰 판이 알아서 줄게 둔다. */
+  @media (max-width:640px){
+    body{
+      height:100dvh; min-height:0; overflow:hidden;
+      padding:8px 12px calc(env(safe-area-inset-bottom) + 8px);
+      gap:6px;
+    }
+    .top{flex:none; max-width:none; margin:0}
+    .top h1{font-size:19px}
+    .score{padding:5px 12px; min-width:66px}
+    .score .val{font-size:18px}
+    .board-wrap{flex:1; min-height:0; width:100%; max-width:none;
+                display:flex; align-items:center; justify-content:center}
+    /* 판은 세로로 긴 직사각형이다. 높이를 100% 로 못박으면 가로가 막혀도
+       안 줄어들어 찌그러진다. 한계만 주고 비율은 스스로 맞추게 둔다. */
+    canvas{width:auto; height:auto; aspect-ratio:380/740;
+           max-width:100%; max-height:100%; margin:0}
+    .hint{display:none}
+  }
+</style>
+</head>
+<body>
+<a class="back" href="index.html">← 골디 게임</a>
+<div class="top">
+  <h1>츄르런</h1>
+  <div class="scores">
+    <div class="score"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+    <div class="score"><div class="lbl">최고</div><div class="val" id="best">0</div></div>
+  </div>
+</div>
+
+<div class="board-wrap">
+  <canvas id="cv" width="380" height="740"></canvas>
+  <button id="soundBtn" aria-label="소리 끄기">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z"/>
+      <path class="wave" d="M15.6 9.4a3.7 3.7 0 0 1 0 5.2M18.2 7a7.3 7.3 0 0 1 0 10"/>
+      <path class="cross" d="M15.8 9.8l5 4.4M20.8 9.8l-5 4.4"/>
+    </svg>
+  </button>
+
+  <div class="overlay" id="startOv">
+    <h2>츄르런</h2>
+    <p>화면을 톡 치면 위아래가 뒤집혀.<br>가시를 피하고 츄르를 먹으면 돼.</p>
+    <div class="legend">
+      <div><canvas class="ic" data-ic="chur" width="36" height="36"></canvas><b>+5</b>츄르</div>
+      <div><canvas class="ic" data-ic="fish" width="36" height="36"></canvas><b>+15</b>생선</div>
+      <div><canvas class="ic" data-ic="gold" width="36" height="36"></canvas><b>+50</b>황금츄르</div>
+    </div>
+    <div class="legend">
+      <div><canvas class="ic" data-ic="shield" width="36" height="36"></canvas><b>보호막</b>한 번 막아 줌</div>
+      <div><canvas class="ic" data-ic="nip" width="36" height="36"></canvas><b>캣닢</b>잠깐 무적</div>
+      <div><canvas class="ic" data-ic="magnet" width="36" height="36"></canvas><b>자석</b>츄르가 딸려옴</div>
+    </div>
+    <button id="startBtn">시작</button>
+  </div>
+
+  <div class="overlay hide" id="pauseOv">
+    <h2>잠깐 멈춤</h2>
+    <p>다른 화면에 다녀왔네. 그대로 이어서 하면 돼.</p>
+    <button id="resumeBtn">이어서</button>
+  </div>
+
+  <div class="overlay hide" id="overOv">
+    <p style="font-size:14px">점수</p>
+    <div class="big" id="finalScore">0</div>
+    <p id="breakdown" style="font-size:13px"></p>
+    <p class="newbest hide" id="newBest">최고 기록!</p>
+    <button id="againBtn">다시</button>
+  </div>
+</div>
+
+<p class="hint">화면 아무 데나 톡 — 위아래 뒤집기<br>컴퓨터에서는 스페이스바</p>
+
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+
+// 위아래 테두리. 고양이는 이 두 선 사이만 오간다.
+const WALL = 22;
+const TOP = WALL, BOT = H - WALL;
+const FIELD = BOT - TOP;
+const CAT_X = 100, CAT_R = 13;
+const G = 0.62, VMAX = 13;
+
+const VAL = { chur: 5, fish: 15, gold: 50 };
+const POWERS = ['shield', 'nip', 'magnet'];
+const NIP_T = 220, MAG_T = 260, GRACE_T = 70;   // 프레임 수. 60이 1초쯤 된다
+
+// 구간마다 색과 이름이 바뀐다. 어디까지 왔는지 눈에 보여야 더 가고 싶어진다.
+const STAGES = [
+  { name: '골목', wall: '#242742', line: 'rgba(255,255,255,.045)' },
+  { name: '지붕', wall: '#243040', line: 'rgba(150,210,255,.05)' },
+  { name: '공장', wall: '#33283f', line: 'rgba(255,190,140,.05)' },
+  { name: '밤하늘', wall: '#1e2440', line: 'rgba(180,180,255,.06)' },
+  { name: '우주', wall: '#2c2340', line: 'rgba(255,160,220,.06)' },
+];
+const stageOf = (d) => Math.min(STAGES.length, Math.floor(d / 4200) + 1);
+
+let best = +(localStorage.getItem('flip_best') || 0);
+$('#best').textContent = best;
+
+// 최고점은 죽었을 때만 적는다(gameOver). 바깥 앱이 이걸 읽어다 순위표에
+// 올리는데, 노는 도중에 적으면 한 판에 알림이 몇 번씩 울린다.
+window.saveBest = function () { if (best > 0) localStorage.setItem('flip_best', best); };
+addEventListener('pagehide', window.saveBest);
+
+let cat, haz, pick, pops, frontier;
+let speed, dist, bonus, score, tick;
+let combo = 0, comboT = 0;
+
+// ── 아슬아슬 통과 ────────────────────────────────────────────────────
+// 장애물을 이만큼 안쪽으로 스치고 지나가면 점수를 준다. 멀찍이 돌아가면
+// 안전하지만 아무것도 안 생긴다.
+const GRAZE = 26;
+let grazes = 0;
+
+// 멀리 갈수록 츄르가 값어치 있어진다. 6000마다 반 배씩, 세 배까지.
+const treatMult = () => Math.min(3, 1 + Math.floor(dist / 6000) * 0.5);
+let shield = 0, nipT = 0, magT = 0, graceT = 0;   // 보호막·캣닢·자석·무적시간
+let stage = 1, stageT = 0;
+let running = false, dead = 0, shake = 0;
+
+function reset() {
+  cat = { y: BOT - CAT_R, vy: 0, dir: 1, spin: 0, onWall: 1, trail: [] };  // dir 1 아래, -1 위
+  haz = []; pick = []; pops = [];
+  speed = 3.0; dist = 0; bonus = 0; score = 0; tick = 0;
+  combo = 0; comboT = 0; grazes = 0; dead = 0; shake = 0;
+  shield = 0; nipT = 0; magT = 0; graceT = 0;
+  stage = 1; stageT = 0;
+  // 처음 한 화면 반은 비워 둔다. 시작하자마자 죽으면 화가 난다.
+  frontier = W + 240;
+  lastLanes = []; prevGap = null;
+  $('#score').textContent = '0';
+}
+
+const hardness = () => Math.min(1, dist / 11000);
+const clampY = (y) => Math.max(TOP + 26, Math.min(BOT - 26, y));
+
+// ── 장애물 만들기 ──────────────────────────────────────────────
+// 하나 놓을 때마다 그게 차지한 가로폭을 돌려준다. 그만큼 띄우고 다음 걸 놓는다.
+
+// 장애물 앞뒤로 반드시 비워 두는 폭.
+const SAFE = 46;
+
+// 츄르를 깔 때는 그 뒤에 뭐가 오는지도 알아야 한다. 그래야 "먹고 바로
+// 눌러도 못 피하는" 자리에 안 놓는다. 그래서 장애물을 화면 밖 한참
+// 앞에서 미리 놓고, 앞뒤 장애물을 둘 다 아는 상태로 그 사이를 채운다.
+const AHEAD = 460;
+
+// 방금 놓은 장애물이 남겨 준 통로. [아래끝, 위끝] 짝의 목록이다.
+let lastLanes = [];
+let prevGap = null;          // { rightX, lanes } — 바로 앞 장애물
+
+// 가만히 있다가 t 프레임 동안 중력만으로 갈 수 있는 세로 거리.
+// 뒤집는 순간부터 0.5·G·t² 만큼 움직인다.
+const reachIn = (t) => 0.5 * G * t * t;
+// 거꾸로, 세로로 d 만큼 옮기는 데 드는 프레임 수.
+const framesFor = (d) => Math.sqrt(Math.max(0, d) / (0.5 * G));
+
+// 두 통로 사이에서 반드시 옮겨야 하는 세로 거리. 겹치면 0.
+function moveNeeded(A, B) {
+  let best = Infinity;
+  for (const a of A) for (const b of B) {
+    if (b[1] >= a[0] && b[0] <= a[1]) return 0;
+    best = Math.min(best, b[0] > a[1] ? b[0] - a[1] : a[0] - b[1]);
+  }
+  return best === Infinity ? 0 : best;
+}
+
+function feed() {
+  // 앞 장애물의 오른쪽 끝도 같이 흘러가야 한다. 안 그러면 사이 간격을
+  // 잘못 재서 츄르가 장애물 위에 얹힌다.
+  frontier -= speed;
+  if (prevGap) prevGap.rightX -= speed;
+  if (frontier > W + AHEAD) return;
+
+  const h0 = haz.length, p0 = pick.length;
+  let x = frontier;
+  const wd = place(x);
+  const lanes = lastLanes;
+
+  if (prevGap) {
+    // 여기가 이 게임의 공정함이 걸린 곳이다. 옮겨 가야 하는 거리를 재서,
+    // 그만큼 날아갈 시간이 안 나오면 이 장애물을 통째로 뒤로 민다.
+    // 이걸 안 하면 빨라졌을 때 "아무리 잘해도 못 피하는" 배치가 나온다.
+    // 여유 1.32 배. 봇으로 츄르 수백 개를 하나하나 찔러 보며 맞춘 값이다.
+    // 더 빠듯하면 못 피하는 자리가 생기고, 더 늘리면 긴장이 사라진다.
+    const want = framesFor(moveNeeded(prevGap.lanes, lanes)) * speed * 1.32 + 24;
+    const push = want - (x - prevGap.rightX);
+    if (push > 0) {
+      for (let i = h0; i < haz.length; i++) haz[i].x += push;
+      for (let i = p0; i < pick.length; i++) pick[i].x += push;
+      x += push;
+    }
+    // 앞 장애물과 이 장애물 사이를 채운다. 둘 다 알고 있으니
+    // 두 곳을 모두 통과하는 높이에만 츄르를 놓을 수 있다.
+    fillGap(prevGap.rightX, x, prevGap.lanes, lanes);
+  }
+  prevGap = { rightX: x + wd, lanes };
+
+  // 옮길 일이 없는 구간은 촘촘하게. 어려움은 간격이 아니라
+  // "자리를 옮기게 만드는 것"에서 나와야 한다.
+  const gap = 116 + speed * 11 + (1 - hardness()) * 40 + Math.random() * 62;
+  frontier = x + wd + gap;
+  prunePicks();
+}
+
+// 이 게임의 어려움은 "빨라지는 것"이 아니라 "자리를 옮기게 만드는 것"에서
+// 온다. 앞 장애물이 남긴 통로 한가운데를 다음 장애물이 막아 버리면,
+// 가만히 있을 수가 없다. 대신 옮겨 갈 곳은 반드시 열어 둔다.
+const MIDY = (TOP + BOT) / 2;
+const midOfLanes = () => {
+  const l = widest(lastLanes);
+  return l ? (l[0] + l[1]) / 2 : MIDY;
+};
+
+// 구간이 오를 때마다 새 장애물이 하나씩 붙는다. 한꺼번에 나오면 배울 틈이 없다.
+function place(x) {
+  const hard = hardness();
+  const r = Math.random();
+  const st = stageOf(dist);
+  // 있던 자리를 막을지 말지. 뒤로 갈수록 자주 막는다.
+  const pm = Math.random() < 0.38 + hard * 0.48 ? midOfLanes() : null;
+
+  if (st === 1) return r < 0.72 ? spike(x, pickSide(pm, r), hard, pm) : block(x, hard, pm);
+  if (st >= 4 && r < 0.14) return laser(x, hard, pm);
+  if (st >= 3 && r < 0.29) return saw(x, hard, pm);
+  if (st >= 2 && r < 0.44) return gate(x, hard, pm);
+  if (r < 0.60) return block(x, hard, pm);
+  return spike(x, pickSide(pm, Math.random()), hard, pm);
+}
+
+// 막아야 할 자리가 아래쪽이면 바닥에서, 위쪽이면 천장에서 솟게 한다.
+const pickSide = (pm, r) => (pm == null ? (r < 0.5 ? 'floor' : 'ceil') : (pm > MIDY ? 'floor' : 'ceil'));
+
+// 통로 하나를 만든다. 너무 좁으면 통로로 안 친다.
+const lane = (lo, hi) => (hi - lo > 30 ? [[lo, hi]] : []);
+
+// 벽에서 솟은 가시. blockY 가 있으면 그 높이를 덮을 만큼 키운다.
+const SPIKE_MAX = 214;      // 이보다 크면 넘어갈 길이 안 남는다
+function spike(x, side, hard, blockY) {
+  let h = 48 + Math.random() * (74 + hard * 78);
+  if (blockY != null) {
+    const need = (side === 'floor' ? BOT - blockY : blockY - TOP) + CAT_R + 10;
+    if (need <= SPIKE_MAX) h = Math.max(h, need);
+  }
+  h = Math.min(SPIKE_MAX, h);
+  const w = 34 + Math.random() * 24;
+  haz.push({ kind: 'spike', x, w, h, side });
+  lastLanes = side === 'floor'
+    ? lane(TOP + CAT_R, BOT - h - CAT_R)
+    : lane(TOP + h + CAT_R, BOT - CAT_R);
+  return w;
+}
+
+// 위아래에서 동시에 솟아 가운데만 뚫린 문. 반드시 공중에 떠서 지나야 한다.
+function gate(x, hard, awayFrom) {
+  const w = 34;
+  const open = 208 - hard * 66;
+  // 막을 자리가 있으면 그 반대편에 틈을 낸다.
+  const c = awayFrom == null
+    ? TOP + 108 + Math.random() * (FIELD - 216)
+    : (awayFrom > MIDY ? TOP + 108 + Math.random() * (FIELD / 2 - 108)
+                       : BOT - 108 - Math.random() * (FIELD / 2 - 108));
+  const hC = (c - open / 2) - TOP;
+  const hF = BOT - (c + open / 2);
+  if (hC > 24) haz.push({ kind: 'spike', x, w, h: hC, side: 'ceil' });
+  if (hF > 24) haz.push({ kind: 'spike', x, w, h: hF, side: 'floor' });
+  // 좁은 틈 한가운데에 황금츄르. 지나는 길 한복판이라 위험하진 않다.
+  if (Math.random() < 0.45) pick.push({ x: x + w / 2, y: c, kind: 'gold', got: 0, safe: 1 });
+  lastLanes = lane(TOP + hC + CAT_R, BOT - hF - CAT_R);
+  return w;
+}
+
+// 공중에 떠 있는 덩어리. 위로도 아래로도 지날 수 있다.
+function block(x, hard, coverY) {
+  const w = 30;
+  const h = 92 + Math.random() * (80 + hard * 60);
+  const loY = TOP + 66, hiY = BOT - 66 - h;
+  const y = coverY == null
+    ? loY + Math.random() * Math.max(0, hiY - loY)
+    : Math.max(loY, Math.min(hiY, coverY - h / 2));
+  haz.push({ kind: 'block', x, w, h, y });
+  lastLanes = [...lane(TOP + CAT_R, y - CAT_R), ...lane(y + h + CAT_R, BOT - CAT_R)];
+  return w;
+}
+
+// 위아래로 오르내리는 톱니. 언제 지나느냐가 전부다.
+function saw(x, hard, coverY) {
+  const rad = 21;
+  // 오르내리는 폭이 판을 다 덮으면 비켜설 자리가 없어진다. 위아래로
+  // 한 뼘씩은 늘 남겨 둬서, 타이밍을 놓쳐도 피할 데가 있게 한다.
+  const amp = Math.min(228, 104 + Math.random() * (120 + hard * 80));
+  const lo = TOP + rad + amp, hi = BOT - rad - amp;
+  const mid = coverY == null
+    ? lo + Math.random() * Math.max(0, hi - lo)
+    : Math.max(lo, Math.min(hi, coverY));
+  haz.push({
+    kind: 'saw', x, w: rad * 2, r: rad, mid, amp,
+    per: 108 - hard * 30, ph: Math.random() * 200,
+  });
+  lastLanes = [
+    ...lane(TOP + CAT_R, mid - amp - rad - CAT_R),
+    ...lane(mid + amp + rad + CAT_R, BOT - CAT_R),
+  ];
+  return rad * 2;
+}
+
+// 한쪽 벽에서 뻗어 나와 깜빡이는 전기 벽. 꺼졌을 때 지나거나 반대편으로 피한다.
+function laser(x, hard, blockY) {
+  const w = 13;
+  const side = pickSide(blockY, Math.random());
+  const h = FIELD * 0.58;
+  haz.push({ kind: 'laser', x, w, h, side, per: 104 - hard * 22, ph: Math.random() * 200 });
+  // 꺼지길 기다리지 않아도 지날 수 있는 쪽만 통로로 친다.
+  lastLanes = side === 'floor'
+    ? lane(TOP + CAT_R, BOT - h - CAT_R)
+    : lane(TOP + h + CAT_R, BOT - CAT_R);
+  return w;
+}
+
+// 두 통로 목록이 겹치는 곳. 여기 놓인 츄르는 앞 장애물도 뒤 장애물도
+// 건드리지 않고 일직선으로 먹을 수 있다.
+function overlap(A, B) {
+  const out = [];
+  for (const a of A) for (const b of B) {
+    const lo = Math.max(a[0], b[0]), hi = Math.min(a[1], b[1]);
+    if (hi - lo > 30) out.push([lo, hi]);
+  }
+  return out;
+}
+
+const widest = (list) =>
+  list.reduce((m, v) => (!m || v[1] - v[0] > m[1] - m[0] ? v : m), null);
+const inLane = (l) => l[0] + 18 + Math.random() * Math.max(0, l[1] - l[0] - 36);
+
+// 장애물 두 개 사이를 채운다.
+function fillGap(x0, x1, A, B) {
+  const lo = x0 + SAFE, hi = x1 - SAFE;
+  const span = hi - lo;
+  if (span < 60) return;
+
+  // 두 곳을 다 지나는 높이가 있으면 그 높이로 쭉 깐다. 줄만 따라가면
+  // 앞뒤 장애물이 저절로 피해진다.
+  const both = overlap(A, B);
+  let yAt;
+  if (both.length) {
+    const l = both[Math.floor(Math.random() * both.length)];
+    // 통로 한가운데를 잡고, 물결은 통로 안에서만 친다. 밖으로 삐져나가면
+    // 그 츄르를 따라간 사람이 장애물에 걸린다.
+    const y = (l[0] + l[1]) / 2;
+    const room = Math.min(58, (l[1] - l[0]) / 2 - 20);
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    yAt = (t) => y + (room > 12 ? Math.sin(t * Math.PI) * room * dir : 0);
+  } else {
+    // 겹치는 데가 없으면 반드시 자리를 옮겨야 하는 구간이다.
+    //
+    // 여길 직선으로 이으면 안 된다. 고양이는 중력으로 움직여서 곡선을
+    // 그리는데, 직선 위 한가운데 놓인 츄르는 "거기 있으면 이미 늦은"
+    // 자리가 된다. 실제 낙하 곡선(t²)을 그대로 따라 깐다.
+    const a = widest(A), b = widest(B);
+    if (!a || !b) return;
+    const down = (b[0] + b[1]) / 2 > (a[0] + a[1]) / 2;
+    const ya = down ? a[1] - 20 : a[0] + 20;      // 넘어갈 쪽 가장자리에서 출발
+    const yb = down ? b[0] + 20 : b[1] - 20;      // 도착은 들어서자마자
+    yAt = (t) => ya + (yb - ya) * t * t;
+  }
+
+  // 사이가 넓으면 그만큼 길게 깐다. 길이 길수록 츄르가 길을 알려 준다.
+  const n = Math.max(3, Math.min(7, Math.round(span / 46)));
+  const step = Math.min(42, span / (n - 1));
+  const start = lo + Math.random() * Math.max(0, span - (n - 1) * step);
+  // 곡선은 앞 장애물을 벗어난 x0 에서 시작해 마지막 츄르 자리(hi)에서
+  // 끝난다. 다음 장애물(x1)에서 끝나게 하면, 마지막 츄르가 아직 3분의 1쯤
+  // 남은 자리에 놓여서 거기서부터는 도저히 못 넘어간다. 츄르 줄이 끝나는
+  // 순간 이미 건너가 있어야 한다.
+  const at = (px) => yAt(Math.min(1, Math.max(0, (px - x0) / Math.max(1, hi - x0))));
+
+  // 모든 구간에 깔지는 않는다. 츄르만 따라가면 되는 게임이 되면 심심하다.
+  if (Math.random() < 0.55) {
+    for (let i = 0; i < n; i++) {
+      // 줄 끝에 가끔 생선. 끝까지 따라가야 먹는다.
+      const kind = (i === n - 1 && Math.random() < 0.28) ? 'fish' : 'chur';
+      const px = start + i * step;
+      pick.push({ x: px, y: clampY(at(px)), kind, got: 0 });
+    }
+  }
+
+  // 도구도 같은 길 위에 둔다. 아무 데나 두면 평생 못 먹는다.
+  if (Math.random() < 0.17) {
+    const pool = shield ? ['nip', 'magnet'] : ['shield', 'shield', 'nip', 'magnet'];
+    const px = lo + span * 0.5;
+    pick.push({
+      x: px, y: clampY(at(px)),
+      kind: pool[Math.floor(Math.random() * pool.length)], got: 0,
+    });
+  }
+}
+
+// 그래도 장애물과 겹치는 게 남으면 치운다. 먹을 걸 쫓다가 부딪히는 일은
+// 없어야 한다는 게 이 게임의 약속이라, 계산이 틀려도 여기서 막는다.
+function prunePicks() {
+  const PAD = CAT_R + 13;
+  for (let i = pick.length - 1; i >= 0; i--) {
+    const p = pick[i];
+    if (p.got || p.safe) continue;
+    for (const o of haz) {
+      if (o.gone) continue;
+      let bx, by, bw, bh;
+      if (o.kind === 'saw') {
+        // 톱니는 오르내리니 지나다니는 길 전체를 막힌 걸로 본다.
+        bx = o.x; bw = o.w;
+        by = o.mid - o.amp - o.r; bh = (o.amp + o.r) * 2;
+      } else {
+        // 전기 벽은 꺼졌다 켜졌다 하니 늘 켜져 있는 셈 치고 본다.
+        const b = boxOf(o);
+        bx = b.x; by = b.y; bw = b.w; bh = b.h;
+      }
+      if (p.x > bx - PAD && p.x < bx + bw + PAD &&
+          p.y > by - PAD && p.y < by + bh + PAD) {
+        pick.splice(i, 1);
+        break;
+      }
+    }
+  }
+}
+
+// ── 부딪혔나 ───────────────────────────────────────────────────
+
+const sawY = (o) => o.mid + o.amp * Math.sin((tick + o.ph) / o.per * Math.PI * 2);
+const laserOn = (o) => ((tick + o.ph) % o.per) < o.per * 0.44;
+
+function boxOf(o) {
+  if (o.kind === 'block') return { x: o.x, y: o.y, w: o.w, h: o.h };
+  return { x: o.x, y: o.side === 'floor' ? BOT - o.h : TOP, w: o.w, h: o.h };
+}
+
+// 고양이와 장애물 사이의 빈틈. 붙어 있으면 0 에 가깝다.
+// 아슬아슬하게 지나갔는지 재는 데 쓴다.
+function gapTo(o) {
+  const cx = CAT_X, cy = cat.y, r = CAT_R * 0.76;
+  if (o.kind === 'saw') return Math.hypot(cx - (o.x + o.r), cy - sawY(o)) - (r + o.r);
+  const b = boxOf(o);
+  const dx = Math.max(b.x - cx, 0, cx - (b.x + b.w));
+  const dy = Math.max(b.y - cy, 0, cy - (b.y + b.h));
+  return Math.hypot(dx, dy) - r;
+}
+
+// 고양이를 살짝 작게 잡는다. 아슬아슬하게 스친 건 살려 줘야 억울하지 않다.
+function hitHaz(o) {
+  const cx = CAT_X, cy = cat.y, r = CAT_R * 0.76;
+  if (o.kind === 'saw') {
+    const dx = cx - (o.x + o.r), dy = cy - sawY(o);
+    return Math.hypot(dx, dy) < r + o.r - 3;
+  }
+  if (o.kind === 'laser' && !laserOn(o)) return false;
+  const b = boxOf(o);
+  return cx + r > b.x && cx - r < b.x + b.w && cy + r > b.y && cy - r < b.y + b.h;
+}
+
+// ── 한 칸 나아가기 ─────────────────────────────────────────────
+
+function step() {
+  tick++;
+  dist += speed;
+  // 천천히 빨라진다. 빨라져도 못 피하는 배치는 안 나온다 — feed 가
+  // 옮겨 갈 시간만큼 간격을 벌려 주기 때문에, 마음 놓고 올릴 수 있다.
+  speed = Math.min(8.8, 3.0 + dist / 3400);
+
+  if (nipT > 0) nipT--;
+  if (magT > 0) magT--;
+  if (graceT > 0) graceT--;
+
+  const st = stageOf(dist);
+  if (st !== stage) { stage = st; stageT = 110; sfxStage(); }
+  if (stageT > 0) stageT--;
+
+  cat.vy = Math.max(-VMAX, Math.min(VMAX, cat.vy + G * cat.dir));
+  cat.y += cat.vy;
+  const fell = Math.abs(cat.vy);
+  let onWall = 0;
+  if (cat.y > BOT - CAT_R) { cat.y = BOT - CAT_R; cat.vy = 0; onWall = 1; }
+  if (cat.y < TOP + CAT_R) { cat.y = TOP + CAT_R; cat.vy = 0; onWall = 1; }
+  // 붙어 있는 내내가 아니라 닿는 그 순간에만 소리를 낸다.
+  if (onWall && !cat.onWall) sfxLand(fell);
+  cat.onWall = onWall;
+
+  // 뒤집히는 걸 눈으로 봐야 조작한 느낌이 난다.
+  const want = cat.dir === 1 ? 0 : Math.PI;
+  let d = want - cat.spin;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  cat.spin += d * 0.3;
+
+  cat.trail.unshift(cat.y);
+  if (cat.trail.length > 9) cat.trail.pop();
+
+  for (const o of haz) o.x -= speed;
+  for (const p of pick) p.x -= speed;
+  while (haz.length && haz[0].x + haz[0].w < -30) haz.shift();
+  while (pick.length && pick[0].x < -30) pick.shift();
+  feed();
+
+  // 자석. 켜져 있는 동안은 가까운 츄르가 알아서 딸려 온다.
+  if (magT > 0) {
+    for (const p of pick) {
+      if (p.got) continue;
+      if (Math.hypot(CAT_X - p.x, cat.y - p.y) < 200) {
+        p.x += (CAT_X - p.x) * 0.16;
+        p.y += (cat.y - p.y) * 0.16;
+      }
+    }
+  }
+
+  // 츄르 줍기. 이어서 먹으면 소리가 한 칸씩 올라간다.
+  // 자석이 츄르를 끌어당기면 줄 순서가 흐트러져서 중간에 끊지 않고 다 훑는다.
+  for (const p of pick) {
+    if (p.got || p.x > CAT_X + 60) continue;
+    // 도구는 그림도 크고 놓치면 아까우니 조금 더 넉넉하게 잡아 준다.
+    const reach = POWERS.includes(p.kind) ? CAT_R + 21 : CAT_R + 13;
+    if (Math.hypot(CAT_X - p.x, cat.y - p.y) >= reach) continue;
+    p.got = 1;
+    if (POWERS.includes(p.kind)) { takePower(p); continue; }
+    // 멀리 갈수록 츄르 한 개가 더 값어치 있다. 뒤로 갈수록 어려워지는데
+    // 점수는 그대로면, 오래 버틴 보람이 거리 점수뿐이라 밋밋하다.
+    const val = Math.round(VAL[p.kind] * treatMult());
+    bonus += val;
+    pops.push({ x: p.x, y: p.y, t: 0, txt: '+' + val, kind: p.kind });
+    if (p.kind === 'gold') sfxGold();
+    else if (p.kind === 'fish') sfxFish();
+    else sfxChur(combo);
+    combo++; comboT = tick;
+    // 여섯 개를 이어 먹으면 덤을 준다. 줄을 끝까지 따라갈 이유가 생긴다.
+    if (combo % 6 === 0) {
+      bonus += 25;
+      pops.push({ x: CAT_X + 34, y: cat.y - 26, t: 0, txt: '연속 ' + combo + '! +25', kind: 'gold' });
+      sfxCombo();
+    }
+  }
+  // 한 줄 먹고 다음 줄까지 이어지도록 조금 넉넉하게 기다려 준다.
+  if (tick - comboT > 72) combo = 0;
+
+  // ── 아슬아슬 통과 ────────────────────────────────────────────────
+  // 장애물을 스칠 듯이 지나가면 점수를 준다. 멀찍이 돌아가면 안전하지만
+  // 아무것도 안 생긴다. 위험을 무릅쓸 이유가 여기서 생긴다.
+  //
+  // 지나간 순간을 잡아야 해서, 고양이 세로선을 막 넘어선 것만 본다.
+  // 가까웠던 최소 거리는 다가오는 동안 계속 재 둔다.
+  for (const o of haz) {
+    if (o.gone || o.grazed) continue;
+    const right = o.kind === 'saw' ? o.x + o.w : (() => { const b = boxOf(o); return b.x + b.w; })();
+    if (right > CAT_X - CAT_R) {
+      // 아직 지나는 중 — 제일 가까웠던 거리를 기억해 둔다
+      if (o.x < CAT_X + 200) {
+        const g = gapTo(o);
+        if (o.near === undefined || g < o.near) o.near = g;
+      }
+      continue;
+    }
+    o.grazed = 1;                       // 완전히 지나갔다
+    if (o.near === undefined || o.near > GRAZE) continue;
+    if (nipT > 0) continue;             // 무적으로 뚫고 간 건 안 쳐 준다
+    const tight = o.near < GRAZE * 0.45;
+    const val = tight ? 20 : 10;
+    bonus += val;
+    grazes++;
+    pops.push({ x: CAT_X + 26, y: cat.y + (tight ? -30 : -22), t: 0,
+                txt: (tight ? '아슬아슬! +' : '스침 +') + val, kind: tight ? 'gold' : 'fish' });
+    sfxGraze(tight);
+    if (tight) shake = Math.max(shake, 4);
+  }
+
+  // 코앞에서 전기 벽이 켜지면 지직 소리로 알려 준다.
+  for (const o of haz) {
+    if (o.kind !== 'laser') continue;
+    const on = laserOn(o);
+    if (on && !o.wasOn) {
+      const d = Math.abs(o.x - CAT_X);
+      if (d < 300) sfxZap(1 - d / 300);
+    }
+    o.wasOn = on;
+  }
+  for (let i = pops.length - 1; i >= 0; i--) {
+    pops[i].t++; pops[i].x -= speed; pops[i].y -= 1.1;
+    if (pops[i].t > 42) pops.splice(i, 1);
+  }
+
+  const n = Math.floor(dist / 26) + bonus;
+  if (n !== score) { score = n; $('#score').textContent = score; }
+
+  for (const o of haz) {
+    if (o.x > CAT_X + CAT_R) break;
+    if (o.gone || !hitHaz(o)) continue;
+    if (nipT > 0) {
+      // 캣닢 먹은 동안은 부딪히는 게 오히려 점수다.
+      o.gone = 1; bonus += 10; shake = 6;
+      pops.push({ x: o.x, y: cat.y, t: 0, txt: '+10', kind: 'nip' });
+      sfxSmash();
+      continue;
+    }
+    if (graceT > 0) continue;
+    if (shield) {
+      shield = 0; graceT = GRACE_T; shake = 9;
+      pops.push({ x: CAT_X + 30, y: cat.y - 24, t: 0, txt: '보호막!', kind: 'shield' });
+      sfxBreak();
+      continue;
+    }
+    gameOver();
+    return;
+  }
+}
+
+// 도구를 주웠을 때.
+function takePower(p) {
+  if (p.kind === 'shield') { shield = 1; }
+  else if (p.kind === 'nip') { nipT = NIP_T; }
+  else { magT = MAG_T; }
+  const label = { shield: '보호막', nip: '캣닢! 무적', magnet: '자석' }[p.kind];
+  pops.push({ x: p.x, y: p.y, t: 0, txt: label, kind: p.kind });
+  sfxPower(p.kind);
+}
+
+// ── 그리기 ─────────────────────────────────────────────────────
+
+function draw() {
+  ctx.save();
+  if (shake > 0.4) {
+    ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
+    shake *= 0.86;
+  }
+  ctx.clearRect(-30, -30, W + 60, H + 60);
+  const S = STAGES[Math.min(STAGES.length, stage) - 1];
+
+  // 흐르는 세로줄. 속도가 눈에 보여야 빨라지는 게 느껴진다.
+  ctx.strokeStyle = S.line;
+  ctx.lineWidth = 2;
+  const off = dist % 62;
+  for (let x = W - off; x > -62; x -= 62) {
+    ctx.beginPath(); ctx.moveTo(x, TOP); ctx.lineTo(x, BOT); ctx.stroke();
+  }
+
+  ctx.fillStyle = S.wall;
+  ctx.fillRect(0, 0, W, TOP);
+  ctx.fillRect(0, BOT, W, H - BOT);
+  ctx.strokeStyle = 'rgba(124,108,255,.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, TOP); ctx.lineTo(W, TOP);
+  ctx.moveTo(0, BOT); ctx.lineTo(W, BOT);
+  ctx.stroke();
+
+  for (const p of pick) if (!p.got) drawPick(ctx, p.kind, p.x, p.y, 1);
+  for (const o of haz) if (!o.gone) drawHaz(o);
+  drawPops();
+  drawCat();
+  drawHud();
+  ctx.restore();
+}
+
+// 지금 뭘 갖고 있는지, 몇 구간인지. 판 위에 얹어 자리를 안 먹는다.
+function drawHud() {
+  let x = 12;
+  // 츄르 값이 올랐으면 알려 준다. 모르면 오래 버틴 보람을 못 느낀다.
+  const mult = treatMult();
+  if (mult > 1) {
+    ctx.fillStyle = 'rgba(14,15,26,.6)';
+    roundRect(x, TOP + 10, 62, 20, 7); ctx.fill();
+    ctx.fillStyle = '#ffb38a';
+    ctx.font = '800 11px -apple-system,system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('츄르 ×' + mult, x + 31, TOP + 24);
+    ctx.textAlign = 'start';
+    x += 70;
+  }
+  const bar = (frac, col, label) => {
+    ctx.fillStyle = 'rgba(14,15,26,.6)';
+    roundRect(x, TOP + 10, 76, 20, 7); ctx.fill();
+    ctx.fillStyle = col;
+    roundRect(x + 3, TOP + 13, 70 * frac, 14, 5); ctx.fill();
+    ctx.fillStyle = '#0e0f1a';
+    ctx.font = '800 11px -apple-system,system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x + 38, TOP + 24);
+    ctx.textAlign = 'start';
+    x += 84;
+  };
+  if (nipT > 0) bar(nipT / NIP_T, '#8ef0b4', '캣닢');
+  if (magT > 0) bar(magT / MAG_T, '#9fd0ff', '자석');
+  if (shield) {
+    ctx.fillStyle = 'rgba(14,15,26,.6)';
+    roundRect(x, TOP + 10, 62, 20, 7); ctx.fill();
+    ctx.fillStyle = '#7fd8ff';
+    ctx.font = '800 11px -apple-system,system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('보호막', x + 31, TOP + 24);
+    ctx.textAlign = 'start';
+  }
+
+  if (stageT > 0) {
+    const a = Math.min(1, stageT / 26);
+    ctx.globalAlpha = a;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.font = '900 30px -apple-system,system-ui,sans-serif';
+    ctx.fillText(stage + '구간', W / 2, H / 2 - 14);
+    ctx.fillStyle = '#b9b0ff';
+    ctx.font = '700 17px -apple-system,system-ui,sans-serif';
+    ctx.fillText(STAGES[Math.min(STAGES.length, stage) - 1].name, W / 2, H / 2 + 14);
+    ctx.textAlign = 'start';
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawHaz(o) {
+  if (o.kind === 'block') {
+    ctx.fillStyle = '#3a3560'; ctx.strokeStyle = '#8f7bff'; ctx.lineWidth = 2;
+    roundRect(o.x, o.y, o.w, o.h, 8); ctx.fill(); ctx.stroke();
+    // 못 지나간다는 걸 한눈에 알게 빗금을 긋는다.
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = 'rgba(143,123,255,.35)'; ctx.lineWidth = 2;
+    for (let i = -o.h; i < o.w + o.h; i += 11) {
+      ctx.beginPath(); ctx.moveTo(o.x + i, o.y); ctx.lineTo(o.x + i - o.h, o.y + o.h); ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  if (o.kind === 'saw') {
+    const cx = o.x + o.r, cy = sawY(o);
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(tick * 0.16);
+    ctx.fillStyle = '#ff6ca8'; ctx.strokeStyle = '#ffd0e2'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a1 = (i / 10) * Math.PI * 2, a2 = ((i + 0.5) / 10) * Math.PI * 2;
+      ctx.lineTo(Math.cos(a1) * o.r, Math.sin(a1) * o.r);
+      ctx.lineTo(Math.cos(a2) * o.r * 0.66, Math.sin(a2) * o.r * 0.66);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#181a2b';
+    ctx.beginPath(); ctx.arc(0, 0, o.r * 0.26, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  if (o.kind === 'laser') {
+    const b = boxOf(o), on = laserOn(o);
+    if (on) {
+      ctx.fillStyle = 'rgba(61,220,151,.22)';
+      ctx.fillRect(b.x - 5, b.y, b.w + 10, b.h);
+      ctx.fillStyle = '#3ddc97';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = 'rgba(255,255,255,.75)';
+      ctx.fillRect(b.x + b.w / 2 - 1.5, b.y, 3, b.h);
+    } else {
+      // 꺼져 있어도 어디 있는지는 보여 줘야 한다. 안 보이면 운이 된다.
+      ctx.strokeStyle = 'rgba(61,220,151,.4)';
+      ctx.lineWidth = 2; ctx.setLineDash([7, 7]);
+      ctx.beginPath();
+      ctx.moveTo(b.x + b.w / 2, b.y); ctx.lineTo(b.x + b.w / 2, b.y + b.h);
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    // 뿌리 쪽에 받침을 그려 어느 벽에서 나왔는지 알려 준다.
+    ctx.fillStyle = '#3ddc97';
+    const ry = o.side === 'floor' ? BOT - 7 : TOP;
+    ctx.fillRect(b.x - 5, ry, b.w + 10, 7);
+    return;
+  }
+
+  // 가시
+  const teeth = Math.max(2, Math.round(o.w / 15));
+  const tw = o.w / teeth;
+  const base = o.side === 'floor' ? BOT : TOP;
+  const tip = o.side === 'floor' ? BOT - o.h : TOP + o.h;
+  ctx.fillStyle = '#ff6ca8'; ctx.strokeStyle = '#ffb0cf'; ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let i = 0; i < teeth; i++) {
+    const x0 = o.x + i * tw;
+    ctx.moveTo(x0, base); ctx.lineTo(x0 + tw / 2, tip); ctx.lineTo(x0 + tw, base);
+    ctx.closePath();
+  }
+  ctx.fill(); ctx.stroke();
+}
+
+// 츄르·생선·황금츄르. 시작 화면 설명에도 같은 그림을 쓴다.
+function drawPick(g, kind, x, y, s) {
+  g.save();
+  g.translate(x, y);
+  g.scale(s, s);
+
+  if (kind === 'shield' || kind === 'nip' || kind === 'magnet') {
+    // 도구는 동그란 테 안에 넣어 둔다. 멀리서도 "저건 먹는 거"로 보인다.
+    const col = { shield: '#7fd8ff', nip: '#8ef0b4', magnet: '#9fd0ff' }[kind];
+    const pulse = 1 + Math.sin((tick + x) / 12) * 0.06;
+    g.scale(pulse, pulse);
+    g.fillStyle = 'rgba(14,15,26,.55)';
+    g.beginPath(); g.arc(0, 0, 15, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = col; g.lineWidth = 2.2;
+    g.beginPath(); g.arc(0, 0, 15, 0, Math.PI * 2); g.stroke();
+    g.strokeStyle = col; g.fillStyle = col;
+    g.lineWidth = 2; g.lineJoin = 'round';
+    if (kind === 'shield') {
+      g.beginPath();
+      g.moveTo(0, -8); g.lineTo(7, -4.5); g.lineTo(7, 2);
+      g.quadraticCurveTo(7, 7, 0, 9);
+      g.quadraticCurveTo(-7, 7, -7, 2); g.lineTo(-7, -4.5);
+      g.closePath(); g.stroke();
+    } else if (kind === 'nip') {
+      for (const a of [-0.9, 0, 0.9]) {
+        g.save(); g.rotate(a);
+        g.beginPath(); g.ellipse(0, -4.5, 3.2, 6.5, 0, 0, Math.PI * 2); g.stroke();
+        g.restore();
+      }
+      g.beginPath(); g.moveTo(0, 2); g.lineTo(0, 9); g.stroke();
+    } else {
+      g.lineWidth = 3.4; g.lineCap = 'butt';
+      g.beginPath(); g.arc(0, 1, 6.2, Math.PI, 0); g.stroke();
+      g.beginPath(); g.moveTo(-6.2, 1); g.lineTo(-6.2, 7);
+      g.moveTo(6.2, 1); g.lineTo(6.2, 7); g.stroke();
+      g.fillStyle = '#ff6ca8';
+      g.fillRect(-8, 6, 3.6, 3.4); g.fillRect(4.4, 6, 3.6, 3.4);
+    }
+    g.restore();
+    return;
+  }
+
+  if (kind === 'fish') {
+    g.rotate(Math.sin((tick + x) / 26) * 0.18);
+    g.fillStyle = '#8fd9ff'; g.strokeStyle = '#dff2ff'; g.lineWidth = 1.4;
+    g.beginPath(); g.ellipse(1, 0, 10, 6.4, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(-8, 0); g.lineTo(-15, -6); g.lineTo(-15, 6); g.closePath();
+    g.fill(); g.stroke();
+    g.fillStyle = '#12283a';
+    g.beginPath(); g.arc(6, -1.6, 1.5, 0, Math.PI * 2); g.fill();
+  } else {
+    const gold = kind === 'gold';
+    g.rotate(-0.5 + Math.sin((tick + x) / 30) * 0.12);
+    const gr = g.createLinearGradient(-4, 0, 4, 0);
+    gr.addColorStop(0, gold ? '#ffe27a' : '#ffb38a');
+    gr.addColorStop(1, gold ? '#ffb800' : '#ff7a9c');
+    g.fillStyle = gr;
+    g.strokeStyle = gold ? '#fff3c4' : '#ffd9e4';
+    g.lineWidth = 1.4;
+    roundRectOn(g, -4.5, -11, 9, 22, 4.5);
+    g.fill(); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(-1.4, -7); g.lineTo(-1.4, 7); g.stroke();
+    if (gold) {
+      g.fillStyle = '#fff8d8';
+      for (const [sx, sy, sr] of [[8, -9, 2.2], [-8, 8, 1.7]]) {
+        g.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          g.lineTo(sx + Math.cos(a) * (i % 2 ? sr : sr * 2.4), sy + Math.sin(a) * (i % 2 ? sr : sr * 2.4));
+        }
+        g.closePath(); g.fill();
+      }
+    }
+  }
+  g.restore();
+}
+
+const POP_COLOR = {
+  gold: '#ffd76b', fish: '#8fd9ff', chur: '#ffc6a0',
+  shield: '#7fd8ff', nip: '#8ef0b4', magnet: '#9fd0ff',
+};
+
+function drawPops() {
+  ctx.textAlign = 'center';
+  for (const p of pops) {
+    ctx.globalAlpha = 1 - p.t / 42;
+    ctx.fillStyle = POP_COLOR[p.kind] || '#ffc6a0';
+    ctx.font = '800 17px -apple-system,system-ui,sans-serif';
+    ctx.fillText(p.txt, p.x, p.y);
+  }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'start';
+}
+
+function drawCat() {
+  // 잔상. 어디서 왔는지 보이면 궤적을 읽기 쉬워진다.
+  // 캣닢을 먹었으면 무지개로 끈다. 무적인 게 한눈에 보여야 시원하다.
+  for (let i = cat.trail.length - 1; i >= 1; i--) {
+    ctx.globalAlpha = 0.05 + (1 - i / cat.trail.length) * (nipT > 0 ? 0.3 : 0.13);
+    ctx.fillStyle = nipT > 0 ? `hsl(${(tick * 7 + i * 26) % 360} 90% 68%)` : '#8f7bff';
+    ctx.beginPath();
+    ctx.arc(CAT_X - i * 3.2, cat.trail[i], CAT_R * (1 - i * 0.06), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // 자석이 켜져 있으면 끌어당기는 범위를 옅게 보여 준다.
+  if (magT > 0) {
+    ctx.strokeStyle = `rgba(159,208,255,${0.1 + Math.sin(tick / 9) * 0.05})`;
+    ctx.lineWidth = 2; ctx.setLineDash([5, 9]);
+    ctx.beginPath(); ctx.arc(CAT_X, cat.y, 200, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // 보호막은 테두리로, 부딪히고 난 무적 시간은 깜빡임으로 알려 준다.
+  if (shield) {
+    ctx.strokeStyle = `rgba(127,216,255,${0.5 + Math.sin(tick / 7) * 0.25})`;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.arc(CAT_X, cat.y, CAT_R + 7, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (graceT > 0 && Math.floor(tick / 4) % 2) {
+    ctx.strokeStyle = 'rgba(255,255,255,.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(CAT_X, cat.y, CAT_R + 5, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.translate(CAT_X, cat.y);
+  ctx.rotate(cat.spin);
+
+  ctx.strokeStyle = '#c9bcff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  const wag = Math.sin(tick / 7) * 4;
+  ctx.beginPath();
+  ctx.moveTo(-CAT_R + 2, 1);
+  ctx.quadraticCurveTo(-CAT_R - 10, 2 + wag, -CAT_R - 13, -6 + wag);
+  ctx.stroke();
+
+  ctx.fillStyle = '#8f7bff';
+  ctx.beginPath();
+  ctx.moveTo(-8, -9); ctx.lineTo(-10, -18); ctx.lineTo(-1, -12); ctx.closePath();
+  ctx.moveTo(8, -9); ctx.lineTo(10, -18); ctx.lineTo(1, -12); ctx.closePath();
+  ctx.fill();
+
+  const gr = ctx.createLinearGradient(0, -CAT_R, 0, CAT_R);
+  gr.addColorStop(0, '#a996ff'); gr.addColorStop(1, '#7c6cff');
+  ctx.fillStyle = gr;
+  ctx.beginPath(); ctx.arc(0, 0, CAT_R, 0, Math.PI * 2); ctx.fill();
+
+  ctx.fillStyle = '#1a1b2e';
+  if (dead) {
+    ctx.strokeStyle = '#1a1b2e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-7, -4); ctx.lineTo(-2, 1); ctx.moveTo(-2, -4); ctx.lineTo(-7, 1);
+    ctx.moveTo(2, -4); ctx.lineTo(7, 1); ctx.moveTo(7, -4); ctx.lineTo(2, 1);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(-4.5, -2, 2.1, 0, Math.PI * 2);
+    ctx.arc(4.5, -2, 2.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#ff6ca8';
+  ctx.beginPath(); ctx.arc(0, 3, 1.7, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function roundRect(x, y, w, h, r) { roundRectOn(ctx, x, y, w, h, r); }
+function roundRectOn(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+// ── 소리 ───────────────────────────────────────────────────────
+// 음원 파일은 안 쓴다. 웹오디오로 그때그때 만든다. 받을 게 없으니
+// 비행기 모드에서도 나고, 앱 용량도 안 먹는다.
+
+const SOUND = { on: localStorage.getItem('flip_sound') !== 'off' };
+let _ac = null, master = null, _noise = null;
+
+function actx() {
+  if (!_ac) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    _ac = new AC();
+    master = _ac.createGain();
+    master.gain.value = SOUND.on ? 1 : 0;
+    master.connect(_ac.destination);
+  }
+  if (_ac.state === 'suspended') _ac.resume();
+  return _ac;
+}
+
+function setSound(on) {
+  SOUND.on = on;
+  localStorage.setItem('flip_sound', on ? 'on' : 'off');
+  $('#soundBtn').classList.toggle('off', !on);
+  $('#soundBtn').setAttribute('aria-label', on ? '소리 끄기' : '소리 켜기');
+  if (master) master.gain.value = on ? 1 : 0;
+  // 소리통은 사람이 누르기 전에 미리 열지 않는다. 아이폰이 싫어한다.
+  if (!on) bgmStop();
+  else if (_ac) actx();
+}
+
+// 톱니와 뒤집는 소리에 쓸 잡음. 한 번만 만들어 두고 계속 돌려쓴다.
+function noiseBuf(ac) {
+  if (_noise) return _noise;
+  const n = Math.floor(ac.sampleRate * 0.5);
+  _noise = ac.createBuffer(1, n, ac.sampleRate);
+  const d = _noise.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  return _noise;
+}
+
+function tone(freq, t0, dur, type, vol, dest) {
+  const ac = actx(); if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(dest || master);
+  o.start(t0); o.stop(t0 + dur + 0.02);
+  return o;
+}
+
+// 뒤집는 순간의 바람 소리. 위로 갈 땐 올라가고 아래로 갈 땐 내려간다.
+function sfxFlip(up) {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime;
+  const s = ac.createBufferSource(); s.buffer = noiseBuf(ac);
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.7;
+  bp.frequency.setValueAtTime(up ? 420 : 1600, t0);
+  bp.frequency.exponentialRampToValueAtTime(up ? 1900 : 360, t0 + 0.17);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(0.075, t0 + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+  s.connect(bp); bp.connect(g); g.connect(master);
+  s.start(t0); s.stop(t0 + 0.22);
+}
+
+// 벽에 닿는 소리. 세게 부딪혔을 때만 낸다. 매번 나면 시끄럽다.
+function sfxLand(v) {
+  const ac = actx(); if (!ac || !SOUND.on || v < 6) return;
+  const t0 = ac.currentTime, V = Math.min(0.09, v / VMAX * 0.09);
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(210, t0);
+  o.frequency.exponentialRampToValueAtTime(84, t0 + 0.09);
+  g.gain.setValueAtTime(V, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+  o.connect(g); g.connect(master);
+  o.start(t0); o.stop(t0 + 0.14);
+}
+
+// 츄르. 연달아 먹으면 음이 한 칸씩 올라간다. 이어 먹는 맛이 여기서 난다.
+function sfxChur(n) {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime;
+  const f = 620 * Math.pow(2, Math.min(n, 9) * 2 / 12);
+  tone(f, t0, 0.11, 'triangle', 0.075);
+  tone(f * 2, t0 + 0.005, 0.08, 'sine', 0.03);
+}
+
+function sfxFish() {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime;
+  tone(700, t0, 0.1, 'square', 0.05);
+  tone(1050, t0 + 0.07, 0.16, 'square', 0.05);
+  tone(1400, t0 + 0.07, 0.14, 'sine', 0.025);
+}
+
+function sfxGold() {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime;
+  [0, 4, 7, 12, 16].forEach((s, i) => {
+    tone(660 * Math.pow(2, s / 12), t0 + i * 0.055, 0.22, 'triangle', 0.055);
+  });
+}
+
+// 전기 벽이 코앞에서 켜질 때. 멀면 작게 들린다.
+function sfxZap(near) {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime, V = 0.05 * near;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(120, t0);
+  o.frequency.exponentialRampToValueAtTime(60, t0 + 0.14);
+  const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 200;
+  g.gain.setValueAtTime(V, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+  o.connect(hp); hp.connect(g); g.connect(master);
+  o.start(t0); o.stop(t0 + 0.18);
+}
+
+// 죽는 소리. 야옹 한 번 하고 쿵.
+function sfxDie() {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime;
+  const o = ac.createOscillator(); o.type = 'sawtooth';
+  o.frequency.setValueAtTime(700, t0);
+  o.frequency.exponentialRampToValueAtTime(880, t0 + 0.07);
+  o.frequency.exponentialRampToValueAtTime(240, t0 + 0.5);
+  const lfo = ac.createOscillator(), lg = ac.createGain();
+  lfo.type = 'sine'; lfo.frequency.value = 14; lg.gain.value = 26;
+  lfo.connect(lg); lg.connect(o.frequency);
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 5;
+  bp.frequency.setValueAtTime(1700, t0);
+  bp.frequency.exponentialRampToValueAtTime(700, t0 + 0.48);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(0.2, t0 + 0.05);
+  g.gain.setValueAtTime(0.2, t0 + 0.24);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.56);
+  o.connect(bp); bp.connect(g); g.connect(master);
+  o.start(t0); o.stop(t0 + 0.58);
+  lfo.start(t0); lfo.stop(t0 + 0.58);
+
+  const th = ac.createOscillator(), tg = ac.createGain();
+  th.type = 'sine';
+  th.frequency.setValueAtTime(160, t0);
+  th.frequency.exponentialRampToValueAtTime(52, t0 + 0.22);
+  tg.gain.setValueAtTime(0.2, t0);
+  tg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
+  th.connect(tg); tg.connect(master);
+  th.start(t0); th.stop(t0 + 0.32);
+}
+
+// 도구를 주웠을 때. 셋이 서로 다르게 들려야 뭘 먹었는지 안 보고도 안다.
+function sfxPower(kind) {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime;
+  if (kind === 'shield') {
+    [523, 784, 1047].forEach((f, i) => tone(f, t0 + i * 0.06, 0.3, 'sine', 0.06));
+  } else if (kind === 'nip') {
+    [392, 523, 659, 784, 1047, 1319].forEach((f, i) =>
+      tone(f, t0 + i * 0.045, 0.26, 'square', 0.05));
+  } else {
+    [880, 660, 880, 1175].forEach((f, i) => tone(f, t0 + i * 0.05, 0.18, 'triangle', 0.055));
+  }
+}
+
+// 캣닢 먹고 장애물을 부술 때
+function sfxSmash() {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime;
+  const s = ac.createBufferSource(); s.buffer = noiseBuf(ac);
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.9;
+  bp.frequency.setValueAtTime(2200, t0);
+  bp.frequency.exponentialRampToValueAtTime(500, t0 + 0.13);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.11, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.15);
+  s.connect(bp); bp.connect(g); g.connect(master);
+  s.start(t0); s.stop(t0 + 0.17);
+  tone(150, t0, 0.12, 'square', 0.07);
+}
+
+// 보호막이 깨질 때. 유리 깨지듯 위에서 아래로.
+function sfxBreak() {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime;
+  [1400, 1050, 760, 520].forEach((f, i) => tone(f, t0 + i * 0.035, 0.2, 'triangle', 0.07));
+}
+
+// 아슬아슬하게 스쳐 지날 때. 바짝 붙었으면 한 음 더 높고 날카롭다.
+function sfxGraze(tight) {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime;
+  const s = ac.createBufferSource(); s.buffer = noiseBuf(ac);
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 3.2;
+  bp.frequency.setValueAtTime(tight ? 2600 : 1800, t0);
+  bp.frequency.exponentialRampToValueAtTime(tight ? 900 : 700, t0 + 0.12);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(tight ? 0.075 : 0.045, t0 + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.15);
+  s.connect(bp); bp.connect(g); g.connect(master);
+  s.start(t0); s.stop(t0 + 0.17);
+  if (tight) tone(1568, t0 + 0.02, 0.14, 'triangle', 0.04);
+}
+
+function sfxCombo() {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime;
+  [784, 988, 1319].forEach((f, i) => tone(f, t0 + i * 0.045, 0.22, 'sine', 0.055));
+}
+
+// 구간이 바뀔 때. 짧게 한 번 울려 준다.
+function sfxStage() {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime;
+  [523, 659, 784].forEach((f, i) => tone(f, t0 + i * 0.07, 0.42, 'triangle', 0.06));
+}
+
+function sfxBest() {
+  const ac = actx(); if (!ac || !SOUND.on) return;
+  const t0 = ac.currentTime + 0.45;
+  [0, 4, 7, 12].forEach((s, i) => {
+    tone(523.25 * Math.pow(2, s / 12), t0 + i * 0.1, 0.3, 'triangle', 0.07);
+  });
+}
+
+// 배경음. 짧은 여덟 마디를 도는데, 게임이 빨라지면 같이 빨라진다.
+const BGM = { i: 0, next: 0, timer: null, gain: null };
+const PENTA = [0, 3, 5, 7, 10];              // 단조 5음. 조금 쫓기는 느낌이 난다
+const MEL = [0, 3, 2, 4, null, 3, 1, 2];
+const BASS = [0, null, 0, null, 3, null, 2, null];
+const deg = (d) => PENTA[((d % 5) + 5) % 5] + Math.floor(d / 5) * 12;
+const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+function bgmStart() {
+  const ac = actx(); if (!ac || BGM.timer) return;
+  BGM.gain = ac.createGain(); BGM.gain.gain.value = 0.5;
+  BGM.gain.connect(master);
+  BGM.i = 0; BGM.next = ac.currentTime + 0.06;
+  BGM.timer = setInterval(bgmTick, 40);
+}
+
+function bgmStop() {
+  if (BGM.timer) { clearInterval(BGM.timer); BGM.timer = null; }
+  if (BGM.gain) { try { BGM.gain.disconnect(); } catch (e) {} BGM.gain = null; }
+}
+
+function bgmTick() {
+  const ac = actx(); if (!ac || !BGM.gain) return;
+  // 속도가 오를수록 한 박이 짧아진다.
+  const beat = 0.30 - (Math.min(7.6, speed) - 3) / 4.6 * 0.10;
+  while (BGM.next < ac.currentTime + 0.18) {
+    const s = BGM.i % 8, t = BGM.next;
+    if (MEL[s] != null) tone(midi(74 + deg(MEL[s])), t, beat * 0.55, 'square', 0.038, BGM.gain);
+    if (BASS[s] != null) tone(midi(45 + deg(BASS[s])), t, beat * 0.8, 'triangle', 0.085, BGM.gain);
+    if (s % 2 === 1) tone(midi(96), t, 0.025, 'square', 0.01, BGM.gain);
+    BGM.i++; BGM.next += beat;
+  }
+}
+
+// ── 돌리기 ─────────────────────────────────────────────────────
+
+function loop() {
+  if (running) step();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function flip() {
+  if (!running) return;
+  cat.dir *= -1;
+  // 뒤집는 순간 속도를 반쯤 죽인다. 안 그러면 관성 때문에 한참을 더
+  // 흘러가서 조작한 느낌이 안 난다.
+  cat.vy *= 0.35;
+  sfxFlip(cat.dir === -1);
+}
+
+function start() {
+  reset();
+  $('#startOv').classList.add('hide');
+  $('#overOv').classList.add('hide');
+  $('#pauseOv').classList.add('hide');
+  running = true;
+  // 소리는 사람이 누른 순간에만 열린다. 아이폰이 그렇게 막아 뒀다.
+  if (SOUND.on) { actx(); bgmStart(); }
+}
+
+function resume() {
+  $('#pauseOv').classList.add('hide');
+  running = true;
+  if (SOUND.on) bgmStart();
+}
+
+function gameOver() {
+  running = false;
+  dead = 1;
+  shake = 10;
+  bgmStop();
+  sfxDie();
+  $('#finalScore').textContent = score;
+  $('#breakdown').textContent =
+    `달린 거리 ${Math.floor(dist / 26)} + 먹은 것 ${bonus}`
+    + (grazes ? ` · 아슬아슬 ${grazes}번` : '')
+    + ` · ${stage}구간 ${STAGES[Math.min(STAGES.length, stage) - 1].name}`;
+  const isNew = score > best;
+  if (isNew) {
+    best = score;
+    localStorage.setItem('flip_best', best);
+    $('#best').textContent = best;
+    sfxBest();
+  }
+  $('#newBest').classList.toggle('hide', !isNew);
+  $('#overOv').classList.remove('hide');
+}
+
+cv.addEventListener('pointerdown', (e) => { e.preventDefault(); flip(); });
+addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+    e.preventDefault();
+    if (!running) start(); else flip();
+  }
+});
+$('#startBtn').addEventListener('click', start);
+$('#againBtn').addEventListener('click', start);
+$('#resumeBtn').addEventListener('click', resume);
+
+$('#soundBtn').addEventListener('click', () => setSound(!SOUND.on));
+
+// 화면을 벗어나면 멈춘다. 처음부터가 아니라 멈춘 자리에서 이어서 하게 둔다.
+addEventListener('visibilitychange', () => {
+  if (document.hidden && running) {
+    running = false;
+    bgmStop();
+    $('#pauseOv').classList.remove('hide');
+  }
+});
+
+// 시작 화면의 설명 그림도 게임에서 쓰는 것과 같은 함수로 그린다.
+for (const el of document.querySelectorAll('.ic')) {
+  const g = el.getContext('2d');
+  g.translate(18, 18);
+  drawPick(g, el.dataset.ic, 0, 0, 1);
+}
+
+setSound(SOUND.on);
+reset();
+loop();
+</script>
+</body>
+</html>
