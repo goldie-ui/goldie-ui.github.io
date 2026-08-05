@@ -272,6 +272,19 @@ function stepPhysics(dt){
   // stays put but velocity creeps up, which made "is it settled?" unanswerable
   // from velocity alone. Judge rest by how far it actually moved, and bleed
   // off that phantom energy so piles genuinely go quiet.
+  // 굴러가는 공은 ω = v/r 이다. 그보다 빠르게 돌고 있으면 바닥을 긁으며
+  // 미끄러지는 중이라는 뜻이고, 실제로는 마찰이 곧바로 잡는다. 안 잡아 주면
+  // 쌓인 더미 위에 하나 떨어뜨렸을 때 밑엣것들이 제자리에서 팽이처럼 돈다
+  // (재 보니 초당 오십 바퀴까지 났다).
+  //
+  // 반드시 충돌까지 다 끝난 뒤에 걸어야 한다. 통합 단계에서 걸면 그 뒤
+  // 충돌이 회전을 다시 얹어 버려서 아무 소용이 없다.
+  for(const b of bodies){
+    const sp = Math.hypot(b.vx, b.vy);
+    const cap = sp < 12 ? sp / b.r * 0.5 : sp / b.r * 0.8 + 0.2;
+    if(b.vrot >  cap) b.vrot =  cap;
+    if(b.vrot < -cap) b.vrot = -cap;
+  }
   for(const b of bodies){
     b.moved = Math.hypot(b.x-b._px, b.y-b._py);
     // This threshold decides what counts as "not moving". Set too high it eats
