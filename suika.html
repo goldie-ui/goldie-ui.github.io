@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="골디게임">
-<title>황금수박</title>
+<title>황금냥</title>
 <style>
   :root{
     --bg:#0f0a14; --jar:#1a1220; --line:rgba(255,255,255,.09);
@@ -34,6 +34,11 @@
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
   .sub{color:var(--faint); font-size:12px; margin-bottom:12px}
 
+  .themes{display:flex; gap:6px; margin-bottom:11px}
+  .themes button{background:var(--jar); color:var(--muted); border:1px solid var(--line);
+    border-radius:99px; padding:6px 15px; font-size:12.5px; font-weight:700; cursor:pointer;
+    transition:all .18s}
+  .themes button.on{background:var(--accent); color:#2a1500; border-color:var(--accent)}
   .hud{width:100%; max-width:380px; display:flex; align-items:center; gap:10px; margin-bottom:10px}
   .score{flex:1; background:var(--jar); border:1px solid var(--line); border-radius:13px;
     padding:8px 13px}
@@ -95,8 +100,9 @@
 </head>
 <body>
 <a class="back" href="index.html">← 골디 게임</a>
-<h1>🍉 황금수박</h1>
-<div class="sub">같은 과일끼리 합쳐서 황금수박까지</div>
+<h1 id="title">🐱 황금냥</h1>
+<div class="sub" id="sub">같은 것끼리 합쳐서 최종 단계까지</div>
+<div class="themes" id="themes"></div>
 
 <div class="hud">
   <div class="score"><div class="k">점수</div><div class="v" id="score">0</div></div>
@@ -107,8 +113,8 @@
 <div class="stage">
   <canvas id="cv" width="380" height="540"></canvas>
   <div class="screen" id="startScreen">
-    <h2>🍉 황금수박</h2>
-    <p>과일을 떨어뜨려 같은 것끼리 합치세요.<br>통 밖으로 넘치면 끝이에요.</p>
+    <h2 id="startTitle">🐱 황금냥</h2>
+    <p id="startBlurb"></p>
     <button class="btn" id="startBtn">시작</button>
   </div>
   <div class="screen hide" id="overScreen">
@@ -129,20 +135,47 @@ const nx=document.getElementById('next'), nctx=nx.getContext('2d');
 const $=s=>document.querySelector(s);
 const W=cv.width, H=cv.height;
 
-/* ---------------- fruit ladder ---------------- */
-const FRUITS = [
-  {n:'블루베리', r:12,  c:'#6f7fd6', c2:'#4a58a8', score:1},
-  {n:'체리',     r:16,  c:'#e0405a', c2:'#a82238', score:3},
-  {n:'포도',     r:21,  c:'#9a5cc9', c2:'#6c3a94', score:6},
-  {n:'귤',       r:27,  c:'#ffa63d', c2:'#d97a15', score:10},
-  {n:'사과',     r:34,  c:'#e8443c', c2:'#a82420', score:15},
-  {n:'배',       r:42,  c:'#d6d066', c2:'#a39a38', score:21},
-  {n:'복숭아',   r:51,  c:'#ff9db0', c2:'#e06a86', score:28},
-  {n:'파인애플', r:61,  c:'#f2c53d', c2:'#c2941a', score:36},
-  {n:'메론',     r:72,  c:'#8fd66a', c2:'#5fa441', score:45},
-  {n:'수박',     r:85,  c:'#3fa050', c2:'#266b33', score:55},
-  {n:'황금수박', r:100, c:'#ffd34d', c2:'#e0a017', score:100, gold:true},
-];
+/* ---------------- themes ----------------
+   The ladder is data, and each theme brings its own draw function, so the
+   whole game can be re-skinned by switching one key. Radii and scores are
+   shared: they are what the physics and the difficulty curve are tuned to. */
+const SIZES  = [12, 16, 21, 27, 34, 42, 51, 61, 72, 85, 100];
+const SCORES = [1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 100];
+
+const THEMES = {
+  cat: {
+    label:'고양이', icon:'🐱', title:'황금냥', goalWord:'황금냥',
+    blurb:'고양이를 떨어뜨려 같은 냥끼리 합치세요.',
+    names:['아기냥','턱시도','치즈냥','삼색이','고등어','회색냥','페르시안','샴','숲냥','호랑이','황금냥'],
+    cols:[['#f6d7e4','#dba9c2'], ['#5a5f72','#2f3342'], ['#ffc46b','#e09327'],
+          ['#f4e3c8','#c98f5e'], ['#8fa0bb','#5b6b86'], ['#b9bdc9','#8a8f9e'],
+          ['#f3ece0','#cdbfa8'], ['#e8dcc6','#9c7b5c'], ['#c78f5c','#8a5c34'],
+          ['#f2a13c','#c2701a'], ['#ffd75e','#e0a017']],
+    draw: drawCat,
+  },
+  planet: {
+    label:'행성', icon:'🪐', title:'태양', goalWord:'태양',
+    blurb:'행성을 떨어뜨려 같은 것끼리 합치세요.',
+    names:['운석','달','수성','금성','지구','화성','천왕성','해왕성','토성','목성','태양'],
+    cols:[['#9a938c','#5f5a55'], ['#dcd8d0','#a09a92'], ['#b8a58f','#7d6e5d'],
+          ['#e8c37a','#b8904a'], ['#5aa0e0','#2c5f9e'], ['#e0724a','#a3452a'],
+          ['#8fd8e0','#4f9aa8'], ['#5a78d8','#31479c'], ['#e0c98f','#a8905a'],
+          ['#d9a878','#9c6f45'], ['#ffd75e','#f08c1a']],
+    draw: drawPlanet,
+  },
+};
+let themeKey = localStorage.getItem('suika_theme') || 'cat';
+if(!THEMES[themeKey]) themeKey = 'cat';
+let FRUITS = [];
+function buildLadder(){
+  const th = THEMES[themeKey];
+  FRUITS = SIZES.map((r,i)=>({
+    n: th.names[i], r, score: SCORES[i],
+    c: th.cols[i][0], c2: th.cols[i][1],
+    gold: i===SIZES.length-1,
+  }));
+}
+buildLadder();
 const DROPPABLE = 5;              // only the five smallest ever fall from the top
 const TOP = 74;                   // spawn line
 const DEAD = 108;                 // pile above this for a while = game over
@@ -305,7 +338,8 @@ function burst(x,y,f,r){
 }
 
 /* ---------------- game state ---------------- */
-let score=0, best=+(localStorage.getItem('suika_best')||0);
+const bestKey = ()=> 'suika_best_'+themeKey;
+let score=0, best=+(localStorage.getItem(bestKey())||0);
 let cursor=W/2, current=null, nextType=0, dropLock=0;
 let playing=false, over=false, madeGold=false, overTimer=0, raf=null, lastT=0;
 $('#best').textContent=best;
@@ -336,45 +370,117 @@ function drop(){
 }
 
 /* ---------------- drawing ---------------- */
-function fruitPath(ctx,x,y,r,f,rot){
-  ctx.save(); ctx.translate(x,y); ctx.rotate(rot||0);
+/* ---------------- drawing ----------------
+   Every theme gets the same call: a circle of radius r at (x,y), rolled by
+   rot. Details are dropped as the piece gets small, so a 12px baby cat stays
+   readable instead of turning into mud. */
+function ball(ctx,r,c,c2){
   const g=ctx.createRadialGradient(-r*0.32,-r*0.36,r*0.08, 0,0,r);
-  g.addColorStop(0, f.c); g.addColorStop(1, f.c2);
+  g.addColorStop(0,c); g.addColorStop(1,c2);
   ctx.fillStyle=g;
   ctx.beginPath(); ctx.arc(0,0,r,0,6.284); ctx.fill();
-  // rim
-  ctx.strokeStyle='rgba(0,0,0,.22)'; ctx.lineWidth=Math.max(1,r*0.05);
+  ctx.strokeStyle='rgba(0,0,0,.20)'; ctx.lineWidth=Math.max(1,r*0.045);
   ctx.beginPath(); ctx.arc(0,0,r-ctx.lineWidth/2,0,6.284); ctx.stroke();
-  // watermelon stripes
-  if(r>=80){
-    ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=r*0.10;
-    for(let i=-2;i<=2;i++){
-      ctx.beginPath();
-      ctx.ellipse(0,0, r*0.95, r*0.30*Math.abs(i||0.5), i*0.5, 0, 6.284);
-      ctx.stroke();
-    }
-  }
-  // highlight
-  ctx.fillStyle='rgba(255,255,255,.34)';
-  ctx.beginPath(); ctx.ellipse(-r*0.34,-r*0.40, r*0.26, r*0.17, -0.6, 0, 6.284); ctx.fill();
-  // stem + leaf once it's big enough to read
-  if(r>=20){
-    ctx.strokeStyle='rgba(60,40,20,.75)'; ctx.lineWidth=Math.max(1.5,r*0.07); ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(0,-r*0.92); ctx.lineTo(r*0.06,-r*1.10); ctx.stroke();
-    ctx.fillStyle='#5fae52';
+}
+function drawCat(ctx,x,y,r,f,rot){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(rot||0);
+  // ears poke out behind the head
+  ctx.fillStyle=f.c2;
+  [[-1,1],[1,1]].forEach(([s])=>{
     ctx.beginPath();
-    ctx.ellipse(r*0.24,-r*1.06, r*0.20, r*0.10, -0.5, 0, 6.284); ctx.fill();
+    ctx.moveTo(s*r*0.80, -r*0.44);
+    ctx.lineTo(s*r*0.92, -r*1.06);
+    ctx.lineTo(s*r*0.16, -r*0.80);
+    ctx.closePath(); ctx.fill();
+  });
+  ball(ctx,r,f.c,f.c2);
+  // inner ear
+  if(r>=16){
+    ctx.fillStyle='rgba(255,150,180,.55)';
+    [[-1],[1]].forEach(([s])=>{
+      ctx.beginPath();
+      ctx.moveTo(s*r*0.70,-r*0.52); ctx.lineTo(s*r*0.78,-r*0.92); ctx.lineTo(s*r*0.32,-r*0.74);
+      ctx.closePath(); ctx.fill();
+    });
   }
-  // a face on the golden watermelon, because it's the goal
-  if(f.gold){
-    ctx.fillStyle='rgba(70,45,0,.85)';
-    ctx.beginPath(); ctx.arc(-r*0.26,-r*0.06, r*0.075,0,6.284); ctx.fill();
-    ctx.beginPath(); ctx.arc( r*0.26,-r*0.06, r*0.075,0,6.284); ctx.fill();
-    ctx.strokeStyle='rgba(70,45,0,.85)'; ctx.lineWidth=r*0.055; ctx.lineCap='round';
-    ctx.beginPath(); ctx.arc(0, r*0.02, r*0.30, 0.45, 2.69); ctx.stroke();
+  // face
+  const eo=r*0.30, ey=-r*0.04, er=Math.max(1.2, r*0.11);
+  ctx.fillStyle='rgba(28,22,34,.88)';
+  ctx.beginPath(); ctx.ellipse(-eo,ey,er*0.85,er,0,0,6.284); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( eo,ey,er*0.85,er,0,0,6.284); ctx.fill();
+  if(r>=14){
+    ctx.fillStyle='rgba(255,255,255,.9)';
+    ctx.beginPath(); ctx.arc(-eo+er*0.34, ey-er*0.36, er*0.32,0,6.284); ctx.fill();
+    ctx.beginPath(); ctx.arc( eo+er*0.34, ey-er*0.36, er*0.32,0,6.284); ctx.fill();
+  }
+  if(r>=18){
+    ctx.fillStyle='#ff7a9c';
+    ctx.beginPath();
+    ctx.moveTo(0,r*0.30); ctx.lineTo(-r*0.11,r*0.16); ctx.lineTo(r*0.11,r*0.16);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(28,22,34,.62)'; ctx.lineWidth=Math.max(1,r*0.035); ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(0,r*0.30); ctx.lineTo(0,r*0.42);
+    ctx.moveTo(0,r*0.42); ctx.quadraticCurveTo(-r*0.16,r*0.56,-r*0.26,r*0.38);
+    ctx.moveTo(0,r*0.42); ctx.quadraticCurveTo( r*0.16,r*0.56, r*0.26,r*0.38);
+    ctx.stroke();
+  }
+  if(r>=26){
+    ctx.strokeStyle='rgba(255,255,255,.42)'; ctx.lineWidth=Math.max(1,r*0.03);
+    ctx.beginPath();
+    ctx.moveTo(-r*0.34,r*0.24); ctx.lineTo(-r*0.94,r*0.14);
+    ctx.moveTo(-r*0.34,r*0.36); ctx.lineTo(-r*0.92,r*0.44);
+    ctx.moveTo( r*0.34,r*0.24); ctx.lineTo( r*0.94,r*0.14);
+    ctx.moveTo( r*0.34,r*0.36); ctx.lineTo( r*0.92,r*0.44);
+    ctx.stroke();
+  }
+  // the goal cat wears a little crown
+  if(f.gold && r>=30){
+    ctx.fillStyle='#fff0a8';
+    ctx.beginPath();
+    ctx.moveTo(-r*0.34,-r*0.86); ctx.lineTo(-r*0.22,-r*1.16); ctx.lineTo(0,-r*0.92);
+    ctx.lineTo(r*0.22,-r*1.16); ctx.lineTo(r*0.34,-r*0.86);
+    ctx.closePath(); ctx.fill();
   }
   ctx.restore();
 }
+function drawPlanet(ctx,x,y,r,f,rot){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(rot||0);
+  const ringed = f.n==='토성';
+  if(ringed){
+    ctx.save(); ctx.rotate(-0.42);
+    ctx.strokeStyle='rgba(230,205,150,.75)'; ctx.lineWidth=Math.max(2,r*0.13);
+    ctx.beginPath(); ctx.ellipse(0,0,r*1.55,r*0.42,0,0,6.284); ctx.stroke();
+    ctx.restore();
+  }
+  ball(ctx,r,f.c,f.c2);
+  // surface banding / craters, dropped when too small to read
+  if(r>=22){
+    ctx.save();
+    ctx.beginPath(); ctx.arc(0,0,r-1,0,6.284); ctx.clip();
+    ctx.globalAlpha=.30; ctx.fillStyle=f.c2;
+    for(let i=-2;i<=2;i++){
+      ctx.beginPath();
+      ctx.ellipse(0, i*r*0.36, r*1.1, r*0.13, 0, 0, 6.284); ctx.fill();
+    }
+    ctx.globalAlpha=1; ctx.restore();
+  }
+  ctx.fillStyle='rgba(255,255,255,.30)';
+  ctx.beginPath(); ctx.ellipse(-r*0.34,-r*0.40, r*0.26, r*0.17, -0.6, 0, 6.284); ctx.fill();
+  // the sun burns rather than reflects
+  if(f.gold){
+    ctx.strokeStyle='rgba(255,220,120,.7)'; ctx.lineWidth=Math.max(1.5,r*0.05);
+    for(let i=0;i<10;i++){
+      const a=i/10*6.284;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a)*r*1.03, Math.sin(a)*r*1.03);
+      ctx.lineTo(Math.cos(a)*r*1.20, Math.sin(a)*r*1.20);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+function fruitPath(ctx,x,y,r,f,rot){ THEMES[themeKey].draw(ctx,x,y,r,f,rot); }
 function draw(){
   cx.clearRect(0,0,W,H);
   if(goldFlash>0){
@@ -454,9 +560,9 @@ function loop(ts){
 }
 function gameOver(){
   over=true; playing=false;
-  if(score>best){ best=score; localStorage.setItem('suika_best',best); $('#best').textContent=best; }
+  if(score>best){ best=score; localStorage.setItem(bestKey(),best); $('#best').textContent=best; }
   const biggest=bodies.reduce((m,b)=>Math.max(m,b.type),0);
-  $('#overTitle').textContent = madeGold ? '황금수박 달성! 🏆' : '가득 찼어요!';
+  $('#overTitle').textContent = madeGold ? THEMES[themeKey].goalWord+' 달성! 🏆' : '가득 찼어요!';
   $('#overText').innerHTML =
     `점수 <b>${score.toLocaleString()}</b> · 가장 큰 과일 <b>${FRUITS[biggest].n}</b>` +
     (score>=best && score>0 ? '<br>🎉 최고 기록!' : '');
@@ -498,9 +604,46 @@ $('#retryBtn').onclick=newGame;
 addEventListener('pagehide', silence);
 addEventListener('beforeunload', silence);
 
-/* ladder strip under the board */
+/* ---- theme switcher ---- */
+function applyTheme(){
+  buildLadder();
+  const th=THEMES[themeKey];
+  document.title = th.title;
+  $('#title').textContent = th.icon+' '+th.title;
+  $('#startTitle').textContent = th.icon+' '+th.title;
+  $('#startBlurb').innerHTML = th.blurb+'<br>통 밖으로 넘치면 끝이에요.';
+  best = +(localStorage.getItem(bestKey())||0);
+  $('#best').textContent = best;
+  document.querySelectorAll('#themes button').forEach(b=>
+    b.classList.toggle('on', b.dataset.k===themeKey));
+  renderLadder();
+  drawNext(); draw();
+}
 (function(){
+  const el=$('#themes');
+  Object.entries(THEMES).forEach(([k,th])=>{
+    const b=document.createElement('button');
+    b.dataset.k=k; b.textContent=th.icon+' '+th.label;
+    b.onclick=()=>{
+      if(playing && !over && bodies.length){
+        if(!confirm('테마를 바꾸면 지금 판은 끝나요. 바꿀까요?')) return;
+      }
+      themeKey=k; localStorage.setItem('suika_theme',k);
+      bodies=[]; parts=[]; playing=false; over=false;
+      $('#startScreen').classList.remove('hide');
+      $('#overScreen').classList.add('hide');
+      score=0; $('#score').textContent=0;
+      current=rollType(); nextType=rollType();
+      applyTheme();
+    };
+    el.appendChild(b);
+  });
+})();
+
+/* ladder strip under the board */
+function renderLadder(){
   const el=$('#ladder');
+  el.innerHTML='';
   FRUITS.forEach((f,i)=>{
     if(i) { const s=document.createElement('span'); s.className='arw'; s.textContent='▸'; el.appendChild(s); }
     const d=document.createElement('span'); d.className='f';
@@ -512,8 +655,9 @@ addEventListener('beforeunload', silence);
     const t=document.createElement('span'); t.textContent=f.n; d.appendChild(t);
     el.appendChild(d);
   });
-})();
-drawNext(); draw();
+}
+current=rollType(); nextType=rollType();
+applyTheme();
 </script>
 </body>
 </html>
