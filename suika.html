@@ -285,6 +285,11 @@ function stepPhysics(dt){
   }
 }
 /* merge any touching same-type pair; chains happen naturally next frame */
+// 색을 #rrggbb 로 맞춰 둬야 뒤에서 투명도를 붙일 수 있다.
+function addGlow(x, y, r, col){
+  if(glows.length > 10) glows.shift();      // 폰에서 무거워지지 않게
+  glows.push({x, y, r, col: /^#[0-9a-f]{6}$/i.test(col) ? col : '#ffd34d', life:1});
+}
 function resolveMerges(){
   for(let i=0;i<bodies.length;i++){
     const a=bodies[i]; if(a.merged) continue;
@@ -318,10 +323,12 @@ function resolveMerges(){
         score += Math.round(FRUITS[t+1].score * mult);
         if(t+1===FRUITS.length-1 && !madeGold){ madeGold=true; goldFlash=1; fanfare(); }
         burst(nb.x, nb.y, FRUITS[t+1], nb.r);
+        addGlow(nb.x, nb.y, nb.r, FRUITS[t+1].c);
         pling(t+1);
       } else {
         // two of the final tier cancel out — a big bonus and space back
-        score += Math.round(500*mult); burst(a.x,a.y,FRUITS[t],a.r*1.3); fanfare();
+        score += Math.round(500*mult); burst(a.x,a.y,FRUITS[t],a.r*1.3);
+        addGlow(a.x, a.y, a.r*1.5, '#ffd34d'); fanfare();
       }
       break;
     }
@@ -388,6 +395,8 @@ let texts=[];
 
 /* ---------------- particles ---------------- */
 let parts=[], goldFlash=0;
+// 합쳐진 자리에서 퍼지는 빛. 폰에서도 무겁지 않게 개수를 묶어 둔다.
+let glows=[];
 function burst(x,y,f,r){
   const n=Math.min(26, 8+Math.round(r/4));
   for(let i=0;i<n;i++){
@@ -451,7 +460,7 @@ function rollType(){
 }
 function newGame(){
   bodies=[]; parts=[]; texts=[]; score=0; over=false; madeGold=false; overTimer=0;
-  goldFlash=0; dropLock=0; cursor=W/2;
+  goldFlash=0; dropLock=0; cursor=W/2; glows=[];
   chain=0; chainTimer=0; chainBest=0; chainFlash=0;
   dropped=0; nextMilestone=SURVIVE_STEP;
   current=rollType(); nextType=rollType();
@@ -645,13 +654,45 @@ function draw(){
     cx.fillStyle=t.col; cx.fillText(t.s, t.x, t.y);
     cx.restore();
   });
-  // live chain indicator
+  // 합쳐진 자리에서 퍼지는 빛. 단계가 높을수록 크고 오래 간다.
+  for(let i=glows.length-1;i>=0;i--){
+    const g=glows[i];
+    const k = 1 - g.life;                    // 0 → 1 로 퍼진다
+    const rr = g.r * (1 + k*2.2);
+    const rg = cx.createRadialGradient(g.x, g.y, rr*0.15, g.x, g.y, rr);
+    rg.addColorStop(0, `rgba(255,255,255,${g.life*0.55})`);
+    rg.addColorStop(0.45, `${g.col}${Math.round(g.life*140).toString(16).padStart(2,'0')}`);
+    rg.addColorStop(1, 'rgba(255,255,255,0)');
+    cx.fillStyle = rg;
+    cx.beginPath(); cx.arc(g.x, g.y, rr, 0, 7); cx.fill();
+    // 얇은 고리가 함께 퍼진다
+    cx.strokeStyle = `rgba(255,255,255,${g.life*0.5})`;
+    cx.lineWidth = Math.max(1, 3*g.life);
+    cx.beginPath(); cx.arc(g.x, g.y, rr*0.85, 0, 7); cx.stroke();
+  }
+
+  // 연쇄 표시. 판 한가운데 크게 띄운다. 예전엔 구석에 작은 글씨라
+  // 연쇄가 나도 눈에 안 들어왔다.
   if(chain>=2 && chainTimer>0){
     cx.save();
-    cx.globalAlpha=Math.min(1, chainTimer*2);
-    cx.font='900 15px system-ui, sans-serif'; cx.textAlign='right';
-    cx.fillStyle='#ffd34d';
-    cx.fillText(chain+'연쇄!', W-12, 52);
+    const t = Math.min(1, chainTimer*2.2);
+    const pop = 1 + (1-Math.min(1,chainTimer*3))*0.35;
+    cx.globalAlpha = t;
+    cx.translate(W/2, H*0.30);
+    cx.scale(pop, pop);
+    cx.textAlign='center'; cx.textBaseline='middle';
+    const big = chain >= 4;
+    cx.font = `900 ${big?34:27}px system-ui, sans-serif`;
+    cx.lineWidth = 6; cx.strokeStyle = 'rgba(24,16,28,.8)';
+    cx.strokeText(chain+'연쇄!', 0, 0);
+    cx.fillStyle = big ? '#ff9e3d' : '#ffd34d';
+    cx.fillText(chain+'연쇄!', 0, 0);
+    const mult = CHAIN_MULT[Math.min(chain, CHAIN_MULT.length)-1];
+    cx.font = '800 15px system-ui, sans-serif';
+    cx.lineWidth = 5;
+    cx.strokeText('×'+mult, 0, big?26:22);
+    cx.fillStyle = '#fff';
+    cx.fillText('×'+mult, 0, big?26:22);
     cx.restore();
   }
 }
@@ -689,6 +730,10 @@ function loop(ts){
   parts.forEach(p=>{ p.vy+=900*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*1.5; });
   if(parts.length) parts=parts.filter(p=>p.life>0);
   if(goldFlash>0) goldFlash=Math.max(0,goldFlash-dt*1.6);
+  for(let i=glows.length-1;i>=0;i--){
+    glows[i].life -= dt*2.4;
+    if(glows[i].life <= 0) glows.splice(i,1);
+  }
   if(chainFlash>0) chainFlash=Math.max(0,chainFlash-dt*2);
   // a chain lapses once merges stop coming
   if(chainTimer>0){ chainTimer-=dt; if(chainTimer<=0) chain=0; }
