@@ -241,6 +241,7 @@
     </div>
     <button class="newBtn" id="newBtn">새 게임</button>
     <button class="bgmBtn" id="bgmBtn">🔊 BGM 켬</button>
+    <button class="bgmBtn" id="liteBtn">🌙 어두운 판</button>
   </div>
 </div>
 <div class="touch">
@@ -301,19 +302,35 @@ let shakeT = 0, shakeMag = 0, groupFx = new Map(), texts = [], levelFlash = 0, b
                 This is the real pressure: it punishes slow clearing.
      iRate    – chance the all-purpose I piece survives into the bag        */
 const STAGES = [
-  {n:1, name:'뒷마당',    at:0,     gravity:800, garbage:0, rise:0,     iRate:1.00, tint:'#141626', bpm:100, key:0},
-  {n:2, name:'골목길',    at:1500,  gravity:640, garbage:1, rise:0,     iRate:1.00, tint:'#151a2e', bpm:110, key:2},
-  {n:3, name:'지붕 위',   at:4000,  gravity:500, garbage:2, rise:0,     iRate:0.85, tint:'#1a1630', bpm:120, key:4},
-  {n:4, name:'달빛 정원', at:8000,  gravity:390, garbage:2, rise:26000, iRate:0.75, tint:'#101c2c', bpm:130, key:5},
-  {n:5, name:'별바다',    at:14000, gravity:300, garbage:3, rise:19000, iRate:0.65, tint:'#0f1830', bpm:140, key:7},
-  {n:6, name:'꿈나라',    at:22000, gravity:230, garbage:3, rise:14000, iRate:0.55, tint:'#1c1226', bpm:150, key:9},
-  {n:7, name:'별똥별',    at:32000, gravity:170, garbage:4, rise:10000, iRate:0.45, tint:'#241026', bpm:162, key:11},
+  {n:1, name:'뒷마당',    at:0,     gravity:800, garbage:0, rise:0,     iRate:1.00, tint:'#141626', lite:'#eef0f8', bpm:100, key:0},
+  {n:2, name:'골목길',    at:1500,  gravity:640, garbage:1, rise:0,     iRate:1.00, tint:'#151a2e', lite:'#e9eff9', bpm:110, key:2},
+  {n:3, name:'지붕 위',   at:4000,  gravity:500, garbage:2, rise:0,     iRate:0.85, tint:'#1a1630', lite:'#f0ecfa', bpm:120, key:4},
+  {n:4, name:'달빛 정원', at:8000,  gravity:390, garbage:2, rise:26000, iRate:0.75, tint:'#101c2c', lite:'#e8f1f8', bpm:130, key:5},
+  {n:5, name:'별바다',    at:14000, gravity:300, garbage:3, rise:19000, iRate:0.65, tint:'#0f1830', lite:'#e8eefb', bpm:140, key:7},
+  {n:6, name:'꿈나라',    at:22000, gravity:230, garbage:3, rise:14000, iRate:0.55, tint:'#1c1226', lite:'#f6ecf7', bpm:150, key:9},
+  {n:7, name:'별똥별',    at:32000, gravity:170, garbage:4, rise:10000, iRate:0.45, tint:'#241026', lite:'#fbecf3', bpm:162, key:11},
 ];
 let stage = STAGES[0], riseTimer = 0;
 // 콤보는 조각을 놓을 때마다 이어서 줄을 지운 횟수다. -1 이면 안 이어지는 중.
 // b2b 는 직전에 4줄을 만들었는지. 4줄을 연달아 내면 1.5배를 준다.
 let combo = -1, b2b = false;
 let edgeFlash = 0;     // 크게 터졌을 때 판 테두리가 번쩍이는 정도
+
+// 판 바탕을 밝게 할지. 어두운 판에서는 짙은 색 고양이가 배경에 묻힌다는
+// 얘기가 있어서 고를 수 있게 뒀다. 단계마다 짝이 되는 밝은 색이 있다.
+let bright = localStorage.getItem('cattris_bright') === '1';
+
+function applyLite(){
+  bc.style.background = bright ? stage.lite : stage.tint;
+  const b = $('#liteBtn');
+  if(b) b.textContent = bright ? '☀️ 밝은 판' : '🌙 어두운 판';
+}
+function liteToggle(){
+  bright = !bright;
+  localStorage.setItem('cattris_bright', bright ? '1' : '0');
+  applyLite();
+  draw();
+}
 
 // 콤보가 살아 있는 동안만 옆 칸에 띄운다.
 function showCombo(){
@@ -539,7 +556,7 @@ function refreshStageUI(){
 function applyStage(st){
   stage = st;
   dropInterval = Math.max(80, stage.gravity - Math.min(200, (lines*4)));
-  bc.style.background = stage.tint;
+  applyLite();                       // 고른 밝기에 맞는 바탕색으로
   riseTimer = 0;
   refreshStageUI();
 }
@@ -795,7 +812,8 @@ function draw(){
     bx.translate((Math.random()-0.5)*m, (Math.random()-0.5)*m);
   }
   // grid backdrop
-  bx.fillStyle = 'rgba(255,255,255,.02)';
+  // 밝은 판에서는 흰 무늬가 안 보이니 반대로 옅은 먹색을 깐다
+  bx.fillStyle = bright ? 'rgba(30,32,60,.05)' : 'rgba(255,255,255,.02)';
   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
     if((x+y)%2===0){ bx.fillRect(x*CELL,y*CELL,CELL,CELL); }
   }
@@ -824,7 +842,7 @@ function draw(){
     // ghost silhouette
     let d=0; while(!collides(cur,0,d+1)) d++;
     const ghost = shapeCells(cur.shape).map(c=>({x:cur.x+c.x, y:cur.y+c.y+d}));
-    drawCatPiece(bx, ghost, cur.color, 0, 0, CELL, .16, false, 0, null);
+    drawCatPiece(bx, ghost, cur.color, 0, 0, CELL, bright ? .3 : .16, false, 0, null);
     // the one falling cat — wags harder right after a move
     const live = shapeCells(cur.shape).map(c=>({x:cur.x+c.x, y:cur.y+c.y}));
     const wag = Math.sin(wagPhase) * (0.45 + wagBoost*1.9);
@@ -1241,6 +1259,7 @@ $('#startBtn').onclick = ()=>{
 };
 $('#newBtn').onclick = startGame;
 $('#bgmBtn').onclick = bgmToggle;
+$('#liteBtn').onclick = liteToggle;
 
 // touch buttons
 // ---------------------------------------------------------------
