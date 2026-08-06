@@ -50,11 +50,16 @@
   .nextBox .k{font-size:10px; color:var(--faint)}
 
   .stage{position:relative; width:100%; max-width:380px}
+  /* iOS 에서 판이 찢겨 보이던 것.
+     덮개(.screen/.overlay)에 backdrop-filter 를 걸어 뒀는데, 그게 밑의
+     캔버스와 같은 그림층에 섞이면서 아래쪽에 흐릿한 띠가 남고 그림이
+     어긋나 보였다. 흐림을 걷어내고, 캔버스에 제 층을 따로 준다. */
   canvas{display:block; width:100%; height:auto; background:var(--jar);
-    border:1px solid var(--line); border-radius:16px; touch-action:none; cursor:pointer}
+    border:1px solid var(--line); border-radius:16px; touch-action:none; cursor:pointer;
+    transform:translateZ(0); will-change:transform; isolation:isolate}
 
   .screen{position:absolute; inset:0; border-radius:16px; z-index:5;
-    background:rgba(15,10,20,.90); backdrop-filter:blur(6px);
+    background:rgba(15,10,20,.96);
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     gap:13px; padding:22px; text-align:center}
   .screen.hide{display:none}
