@@ -93,6 +93,25 @@
     canvas{height:100%; width:auto}
     .hud{flex-direction:column; width:auto; max-width:none; margin:0}
   }
+
+  /* 지금 1등을 쫓는 띠.
+     앱에서 게임을 켜면 순위표 1등이 localStorage 로 넘어온다. 혼자 파일만
+     열었을 때는 넘어올 게 없어서 이 띠가 아예 안 나온다.
+     1등 점수는 못박아 둔다 — 남은 점수를 세면 숫자가 줄면서 쫓기는
+     기분이 드는데, 목표를 걸어 두고 올라가는 편이 낫다. */
+  .chase{width:100%; max-width:380px; display:flex; align-items:center; gap:9px;
+    margin:0 auto 12px; font-size:11.5px; color:#ff9fbb}
+  .chase.hide{display:none}
+  .chase .who{font-weight:700; white-space:nowrap; max-width:34%;
+    overflow:hidden; text-overflow:ellipsis}
+  .chase .bar{flex:1; height:5px; border-radius:99px;
+    background:rgba(255,255,255,.10); overflow:hidden}
+  .chase .bar i{display:block; height:100%; width:0;
+    background:linear-gradient(90deg,#ff8fb0,#ffd85b); transition:width .35s ease}
+  .chase .val{font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .chase.won{color:#ffd85b}
+  .chase.won .bar i{background:#ffd85b; animation:chasePulse 1.1s ease-in-out infinite}
+  @keyframes chasePulse{50%{opacity:.4}}
 </style>
 </head>
 <body>
@@ -104,6 +123,12 @@
   <div class="score"><div class="k">점수</div><div class="v" id="score">0</div></div>
   <div class="score"><div class="k">최고</div><div class="v" id="best">0</div></div>
   <div class="nextBox"><div class="k">다음</div><canvas id="next" width="52" height="52"></canvas></div>
+</div>
+
+<div class="chase hide" id="chase">
+  <span class="who" id="chaseWho">1등</span>
+  <span class="bar"><i id="chaseFill"></i></span>
+  <span class="val" id="chaseVal">0</span>
 </div>
 
 <div class="stage">
@@ -464,6 +489,7 @@ function newGame(){
   current=rollType(); nextType=rollType();
   playing=true;
   $('#score').textContent=0;
+  resetChase();
   $('#startScreen').classList.add('hide');
   $('#overScreen').classList.add('hide');
   drawNext();
@@ -793,6 +819,7 @@ function loop(ts){
     overTimer = worst;
     if(worst > 2.0) gameOver();
     $('#score').textContent = score.toLocaleString();
+    bumpChase(score);
   }
   parts.forEach(p=>{ p.vy+=900*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*1.5; });
   if(parts.length) parts=parts.filter(p=>p.life>0);
@@ -890,6 +917,39 @@ function renderLadder(){
 }
 current=rollType(); nextType=rollType();
 applyTheme();
+
+/* ---------------- 지금 1등 ----------------
+   앱이 순위표 1등을 localStorage 에 적어 둔다(게임과 앱이 같은 사이트라
+   함께 쓴다). 혼자 점수를 올리는 게 아니라 누군가를 쫓고 있다는 게
+   보여야 재미가 붙는다. 내가 1등이면 쫓을 사람이 없으니 안 띄운다.
+   var 와 function 으로 적은 건 이 토막이 파일 맨 끝에 있어서다 —
+   위쪽 어디에서 불러도 닿는다. */
+var topRec = null, passedTop = false;
+try {
+  var _t = JSON.parse(localStorage.getItem('dmc_top_nyangtap') || 'null');
+  if (_t && _t.score > 0 && !_t.mine) topRec = _t;
+} catch (e) {}
+
+function bumpChase(cur){
+  var el = document.getElementById('chase');
+  if (!el) return;
+  if (!topRec) { el.classList.add('hide'); return; }
+  el.classList.remove('hide');
+  if (!passedTop && cur > topRec.score) passedTop = true;
+  el.classList.toggle('won', passedTop);
+  if (passedTop) {
+    document.getElementById('chaseWho').textContent = '👑';
+    document.getElementById('chaseVal').textContent = '1등!';
+    document.getElementById('chaseFill').style.width = '100%';
+  } else {
+    document.getElementById('chaseWho').textContent = topRec.name;
+    document.getElementById('chaseVal').textContent = topRec.score.toLocaleString('ko-KR');
+    document.getElementById('chaseFill').style.width =
+      Math.min(100, cur / topRec.score * 100) + '%';
+  }
+}
+function resetChase(){ passedTop = false; bumpChase(0); }
+bumpChase(0);
 </script>
 </body>
 </html>
