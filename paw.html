@@ -951,6 +951,15 @@ for (const t of ['gesturestart', 'gesturechange', 'gestureend']) {
 // 판 위에서는 손가락이 몇 개든 기본 동작을 통째로 막는다.
 cv.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
 cv.addEventListener('touchmove',  (e) => e.preventDefault(), { passive: false });
+
+// 이 화면은 애초에 스크롤할 데가 없다(모든 게 한 화면에 들어간다).
+// 그런데 손가락을 끌면 iOS 가 화면을 튕기고, 그때 바깥 앱의 게임 덮개까지
+// 같이 밀린다. 넘치는 게 없을 때는 끄는 동작 자체를 막는다.
+// 혹시 화면이 아주 작아 넘칠 때는 막지 않는다 — 그때는 정말 스크롤이 필요하다.
+document.addEventListener('touchmove', (e) => {
+  const overflows = document.documentElement.scrollHeight > window.innerHeight + 1;
+  if (!overflows && e.cancelable) e.preventDefault();
+}, { passive: false });
 addEventListener('keydown', (e) => {
   // 컴퓨터로도 해볼 수 있게 숫자판을 구멍에 맞춰 둔다
   const map = { Digit7:0, Digit8:1, Digit9:2, Digit4:3, Digit5:4, Digit6:5, Digit1:6, Digit2:7, Digit3:8,
