@@ -936,6 +936,21 @@ cv.addEventListener('pointerdown', (e) => {
   const p = atCanvas(e);
   whack(p.x, p.y);
 });
+
+// 손가락 두 개로 칠 때 화면이 확대되던 것.
+//
+// 3탄부터 두 마리가 같이 나와서 양손으로 치게 되는데, iOS 는 두 손가락이
+// 닿으면 그걸 확대 동작으로 받는다. 화면이 확대되면 앱의 게임 덮개가
+// (position:fixed 라) 밀려서 뒤가 비치고, 손이 짚는 자리도 어긋난다.
+//
+// touch-action 으로는 못 막는다 — 그건 손가락이 판 위에 있을 때 얘기고,
+// 확대는 문서 전체에 걸린다. iOS 만 쓰는 gesture 이벤트를 직접 막는다.
+for (const t of ['gesturestart', 'gesturechange', 'gestureend']) {
+  document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
+}
+// 판 위에서는 손가락이 몇 개든 기본 동작을 통째로 막는다.
+cv.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+cv.addEventListener('touchmove',  (e) => e.preventDefault(), { passive: false });
 addEventListener('keydown', (e) => {
   // 컴퓨터로도 해볼 수 있게 숫자판을 구멍에 맞춰 둔다
   const map = { Digit7:0, Digit8:1, Digit9:2, Digit4:3, Digit5:4, Digit6:5, Digit1:6, Digit2:7, Digit3:8,
