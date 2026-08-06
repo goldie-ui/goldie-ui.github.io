@@ -326,6 +326,18 @@ const STAGES = [
   {n:7, name:'별똥별',    at:110  , gravity:170, garbage:4, rise:10000, iRate:0.45, tint:'#241026', lite:'#fbecf3', bpm:162, key:11},
 ];
 let stage = STAGES[0], riseTimer = 0;
+
+// ── 락 딜레이 ────────────────────────────────────────────────────────
+// 예전엔 바닥에 닿는 즉시 잠갔다. 그래서 턱 밑으로 밀어 넣는 게 안 됐다.
+// 마지막 단계는 중력이 170ms 라 닿고 0.17초 안에 못 움직이면 그대로
+// 굳었고, ↓ 를 누르면 그 자리에서 바로 잠겼다.
+//
+// 이제 닿아도 0.5초를 준다. 그 사이 움직이거나 돌리면 시간이 되살아난다.
+// 다만 열다섯 번까지다 — 무한히 되살리면 옆으로 흔들며 영영 안 놓을 수
+// 있어서, 버티기가 실력이 아니라 요령이 되어 버린다.
+// 한 칸이라도 더 내려가면 되살리기 횟수를 도로 채워 준다.
+const LOCK_DELAY = 500, LOCK_RESETS = 15;
+let lockTimer = 0, lockResets = 0, lowestY = -99;
 // 콤보는 조각을 놓을 때마다 이어서 줄을 지운 횟수다. -1 이면 안 이어지는 중.
 // b2b 는 직전에 4줄을 만들었는지. 4줄을 연달아 내면 1.5배를 준다.
 let combo = -1, b2b = false;
@@ -381,6 +393,24 @@ function showChase(){
     $('#chaseWho').textContent = topRec.name;      // '까지'까지 넣으면 옆 칸에서 두 줄로 접힌다
     $('#chaseVal').textContent = topRec.score.toLocaleString('ko-KR');
   }
+}
+// 1등을 넘어선 그 순간. 한 판에 한 번뿐이라 크게 터뜨린다.
+// 줄을 지웠을 때와 줄 없는 T-스핀, 두 군데서 부른다.
+function checkPassedTop(){
+  if(topRec && !passedTop && score > topRec.score){
+    passedTop = true;
+    texts.push({x:bc.width/2, y:bc.height*0.30, str:`${topRec.name} 넘었다!! 🏆`,
+                life:1, vy:-0.5, color:'#ffd85b', size:30});
+    edgeFlash = 1; addShake(24); crownFx = 1; fanfare();
+    for(let i=0;i<40;i++){
+      const a = Math.random()*6.283, sp = 2.5 + Math.random()*5;
+      particles.push({x:bc.width/2, y:bc.height*0.42,
+        vx:Math.cos(a)*sp*CELL*0.5, vy:Math.sin(a)*sp*CELL*0.5,
+        life:1, size:CELL*0.2, color: i%2 ? '#ffd85b' : '#ff8fb0',
+        rot:Math.random()*6.3, vr:(Math.random()-0.5)*0.6, star:true});
+    }
+  }
+  showChase();            // 넘어섬 판정 뒤에 불러야 왕관으로 바뀐다
 }
 function showCombo(){
   const box = $('#comboBox');
@@ -460,6 +490,42 @@ function rotateCW(m){
   for(let y=0;y<n;y++)for(let x=0;x<n;x++) r[x][n-1-y]=m[y][x];
   return r;
 }
+function rotateCCW(m){
+  const n=m.length, r=Array.from({length:n},()=>Array(n).fill(0));
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++) r[n-1-x][y]=m[y][x];
+  return r;
+}
+
+// ── 회전 규칙(SRS) ───────────────────────────────────────────────────
+// 예전엔 막히면 좌우로 한두 칸 밀어 보는 게 전부였다. 그래서 좁은 틈에
+// 비틀어 끼우는 게 안 됐고, T-스핀은 아예 불가능했다.
+//
+// 이제 널리 쓰이는 표를 그대로 쓴다. 회전이 막히면 다섯 자리를 차례로
+// 대 보고 첫 번째로 들어가는 자리를 택한다. 표에서는 y 가 위로 자라는데
+// 우리 판은 아래로 자라서, 쓸 때 y 부호를 뒤집는다.
+const KICKS = {
+  JLSTZ: {
+    '0>1':[[0,0],[-1,0],[-1, 1],[0,-2],[-1,-2]],
+    '1>0':[[0,0],[ 1,0],[ 1,-1],[0, 2],[ 1, 2]],
+    '1>2':[[0,0],[ 1,0],[ 1,-1],[0, 2],[ 1, 2]],
+    '2>1':[[0,0],[-1,0],[-1, 1],[0,-2],[-1,-2]],
+    '2>3':[[0,0],[ 1,0],[ 1, 1],[0,-2],[ 1,-2]],
+    '3>2':[[0,0],[-1,0],[-1,-1],[0, 2],[-1, 2]],
+    '3>0':[[0,0],[-1,0],[-1,-1],[0, 2],[-1, 2]],
+    '0>3':[[0,0],[ 1,0],[ 1, 1],[0,-2],[ 1,-2]],
+  },
+  I: {
+    '0>1':[[0,0],[-2,0],[ 1,0],[-2,-1],[ 1, 2]],
+    '1>0':[[0,0],[ 2,0],[-1,0],[ 2, 1],[-1,-2]],
+    '1>2':[[0,0],[-1,0],[ 2,0],[-1, 2],[ 2,-1]],
+    '2>1':[[0,0],[ 1,0],[-2,0],[ 1,-2],[-2, 1]],
+    '2>3':[[0,0],[ 2,0],[-1,0],[ 2, 1],[-1,-2]],
+    '3>2':[[0,0],[-2,0],[ 1,0],[-2,-1],[ 1, 2]],
+    '3>0':[[0,0],[ 1,0],[-2,0],[ 1,-2],[-2, 1]],
+    '0>3':[[0,0],[-1,0],[ 2,0],[-1, 2],[ 2,-1]],
+  },
+};
+
 // 조각 칸에 2 가 들어 있으면 그 칸이 츄르다. 회전은 행렬을 통째로
 // 돌리니 값이 그대로 따라 돌고, 부딪힘 판정은 0 이냐 아니냐만 보므로
 // 1 이든 2 든 똑같이 막힌 칸으로 센다.
@@ -479,7 +545,11 @@ function spawn(type){
     }
   }
   const w = shape[0].length;
-  return { type, shape, color:COLORS[type], x: ((COLS - w)/2)|0, y: type==='I'? -1 : (type==='O'?0:-1) };
+  lockTimer = 0; lockResets = 0; lowestY = -99;
+  // rot 은 지금 몇 번 돌아간 상태인지(0·1·2·3), spun 은 방금 한 동작이
+  // 회전이었는지다. T-스핀은 '돌려서 끼워 넣었을 때'만 쳐 주므로 둘 다 쓴다.
+  return { type, shape, color:COLORS[type], rot:0, spun:false, spinKick:0,
+           x: ((COLS - w)/2)|0, y: type==='I'? -1 : (type==='O'?0:-1) };
 }
 function collides(piece, ox, oy, shape){
   shape = shape || piece.shape;
@@ -491,7 +561,11 @@ function collides(piece, ox, oy, shape){
   }
   return false;
 }
+// 이번에 잠근 조각이 T-스핀이었는지. 잠그고 나면 조각이 판에 섞여
+// 버려서 그때는 못 잰다. 반드시 잠그기 직전에 재 두고 넘긴다.
+let lastSpin = null;
 function lockPiece(){
+  lastSpin = tspinKind();
   const g = ++groupSeq;   // this piece keeps its identity as one cat on the board
   cur.shape.forEach((row,y)=>row.forEach((v,x)=>{
     if(v){ const gy=cur.y+y, gx=cur.x+x;
@@ -547,7 +621,22 @@ function clearLines(){
       grid.splice(y,1); grid.unshift(Array(COLS).fill(null)); cleared++; y++;
     }
   }
-  if(!cleared){ combo = -1; showCombo(); return; }   // 줄을 못 지우면 콤보가 끊긴다
+  if(!cleared){
+    // 줄은 못 지웠어도 T-스핀 자체는 값을 쳐 준다. 자리를 만들어 두는
+    // 한 수라 여기서 안 주면 아무도 준비를 안 한다. 콤보는 끊긴다.
+    if(lastSpin){
+      const gain = (lastSpin==='full' ? 400 : 100) * scoreMult();
+      score += gain;
+      $('#score').textContent = score;
+      texts.push({x:bc.width/2, y:bc.height*0.42,
+                  str:(lastSpin==='full'?'T-스핀!':'T-스핀 미니') + ' +'+gain.toLocaleString('ko-KR'),
+                  life:1, vy:-0.5, color:'#c56cff', size:22});
+      addShake(6); blip(760);
+      checkPassedTop();
+      if(score>best){ best=score; $('#best').textContent = best; }
+    }
+    combo = -1; showCombo(); return;   // 줄을 못 지우면 콤보가 끊긴다
+  }
   {
     lines += cleared;
 
@@ -558,8 +647,14 @@ function clearLines(){
     //   콤보    — 조각을 놓을 때마다 연달아 지우면 쌓인다
     //   백투백  — 4줄을 연달아 만들면 1.5배
     //   올클리어— 판을 싹 비우면 크게 준다. 한 판에 한 번 나올까 말까다
-    const base = [0,100,300,500,800][cleared];
-    const hard = cleared === 4;
+    // T-스핀은 같은 줄 수라도 값이 훨씬 세다. 2줄이면 300 이 1200 이 된다.
+    // 여기가 잘하는 사람의 점수가 크게 벌어지는 자리다.
+    const spin = lastSpin;
+    const base = spin === 'full' ? [400,800,1200,1600][cleared]
+               : spin === 'mini' ? [100,200,400,800][cleared]
+               : [0,100,300,500,800][cleared];
+    // 백투백 사슬은 4줄만이 아니라 T-스핀으로도 이어진다.
+    const hard = cleared === 4 || !!spin;
 
     // 백투백은 이제 사슬이다. 4줄을 연달아 낼수록 배수가 계속 커진다.
     // 예전엔 몇 번을 이어 내든 1.5배로 못박혀서, 잘하는 사람이 더 갈
@@ -569,7 +664,7 @@ function clearLines(){
       if(b2bChain > 0) b2bMult = Math.min(3, 1 + b2bChain * 0.5);
       b2bChain++;
     } else {
-      b2bChain = 0;                       // 2~3줄을 내면 사슬이 끊긴다
+      b2bChain = 0;                       // 그냥 2~3줄을 내면 사슬이 끊긴다
     }
     let gain = Math.round(base * b2bMult);
 
@@ -598,21 +693,7 @@ function clearLines(){
     if(hard || allClear) edgeFlash = 1;
 
     $('#score').textContent = score; $('#lines').textContent = lines;
-    // 1등을 넘어선 그 순간. 한 판에 한 번뿐이라 크게 터뜨린다.
-    if(topRec && !passedTop && score > topRec.score){
-      passedTop = true;
-      texts.push({x:bc.width/2, y:bc.height*0.30, str:`${topRec.name} 넘었다!! 🏆`,
-                  life:1, vy:-0.5, color:'#ffd85b', size:30});
-      edgeFlash = 1; addShake(24); crownFx = 1; fanfare();
-      for(let i=0;i<40;i++){
-        const a = Math.random()*6.283, sp = 2.5 + Math.random()*5;
-        particles.push({x:bc.width/2, y:bc.height*0.42,
-          vx:Math.cos(a)*sp*CELL*0.5, vy:Math.sin(a)*sp*CELL*0.5,
-          life:1, size:CELL*0.2, color: i%2 ? '#ffd85b' : '#ff8fb0',
-          rot:Math.random()*6.3, vr:(Math.random()-0.5)*0.6, star:true});
-      }
-    }
-    showChase();          // 넘어섬 판정 뒤에 불러야 왕관으로 바뀐다
+    checkPassedTop();
     updateStage();
     if(score>best){ best=score; $('#best').textContent = best; }
     // a meow per cleared line, staggered into a little chorus
@@ -636,6 +717,12 @@ function clearLines(){
       texts.push({x:bc.width/2, y:bc.height*0.42 + 34 + (row++)*26, str, life:1,
                   vy:-0.42, color, size});
     };
+    if(spin){
+      const nm = ['','싱글','더블','트리플'][cleared] || '';
+      say(spin==='full' ? `T-스핀 ${nm}!!` : `T-스핀 미니 ${nm}`,
+          spin==='full' ? '#d79cff' : '#b79cd0', spin==='full' ? 27 : 21);
+      if(spin==='full'){ addShake(11); fanfare(); }
+    }
     if(churs) { say(`츄르 ${churs}개! +${300*churs*scoreMult()}`, '#ffb38a', 19); churMeow(); }
     if(b2bMult > 1){
       // 사슬이 길수록 크고 뜨겁게 보여 준다
@@ -743,22 +830,65 @@ function addJunkRow(silent){
 }
 function hardDrop(){
   let d=0; while(!collides(cur,0,d+1)) d++;
+  if(d > 0) cur.spun = false;      // 떨어뜨렸으면 돌려서 끼운 게 아니다
   cur.y += d; score += d*2; $('#score').textContent = score;
   addShake(Math.min(9, 2+d*0.5));
   lockPiece(); dropTimer = 0;
   if(!over) draw();
 }
 function softDrop(){
-  if(!collides(cur,0,1)){ cur.y++; score += 1; $('#score').textContent = score; }
-  else lockPiece();
+  // 닿아 있으면 아무 일도 안 한다. 잠그는 건 tick 의 락 딜레이가 맡는다.
+  if(!collides(cur,0,1)){
+    cur.y++; score += 1; $('#score').textContent = score; cur.spun = false;
+    // 한 칸이라도 더 내려갔으면 되살리기 횟수를 도로 채워 준다
+    if(cur.y > lowestY){ lowestY = cur.y; lockResets = 0; }
+    lockTimer = 0;
+  }
   dropTimer = 0;
 }
-function move(dx){ if(!collides(cur,dx,0)){ cur.x+=dx; wagBoost = Math.min(1, wagBoost+0.9); } }
-function rotate(){
-  const r = rotateCW(cur.shape);
-  for(const kick of [0,-1,1,-2,2]){
-    if(!collides(cur,kick,0,r)){ cur.shape=r; cur.x+=kick; return; }
+// 바닥에 닿은 채로 움직이거나 돌렸을 때 잠기는 시간을 되살린다.
+function touchLock(){
+  if(!cur || over) return;
+  if(collides(cur,0,1) && lockResets < LOCK_RESETS){ lockTimer = 0; lockResets++; }
+}
+function move(dx){
+  // 옆으로 밀면 '돌려서 끼웠다'가 아니게 된다. T-스핀 표식을 푼다.
+  if(!collides(cur,dx,0)){ cur.x+=dx; cur.spun=false; wagBoost = Math.min(1, wagBoost+0.9); touchLock(); }
+}
+function rotate(dir){
+  if(!cur || cur.type==='O') return;            // 정사각형은 돌 자리가 없다
+  const cw = dir !== -1;
+  const from = cur.rot|0, to = (from + (cw ? 1 : 3)) % 4;
+  const shape = cw ? rotateCW(cur.shape) : rotateCCW(cur.shape);
+  const table = (cur.type==='I' ? KICKS.I : KICKS.JLSTZ)[from+'>'+to];
+  for(let i=0;i<table.length;i++){
+    const dx = table[i][0], dy = -table[i][1];  // 표는 y 가 위로 자란다
+    if(!collides(cur, dx, dy, shape)){
+      cur.shape = shape; cur.x += dx; cur.y += dy; cur.rot = to;
+      cur.spun = true; cur.spinKick = i;
+      touchLock();
+      return;
+    }
   }
+}
+
+// ── T-스핀 판정 ──────────────────────────────────────────────────────
+// T 조각을 돌려서 끼워 넣었고, 가운데를 둘러싼 네 귀퉁이 중 셋 이상이
+// 막혀 있으면 T-스핀이다. T 가 가리키는 쪽 두 귀퉁이를 '앞'이라 하고,
+// 앞이 둘 다 막혔으면 제대로 된 것, 하나만 막혔으면 미니로 친다.
+// 다만 마지막 다섯 번째 킥으로 비집고 들어갔으면 미니라도 제대로 쳐 준다 —
+// 그 자리는 우연히 들어가지지 않는다.
+const T_FRONT = {0:[[-1,-1],[1,-1]], 1:[[1,-1],[1,1]], 2:[[1,1],[-1,1]], 3:[[-1,1],[-1,-1]]};
+const T_ALL = [[-1,-1],[1,-1],[1,1],[-1,1]];
+function tspinKind(){
+  if(!cur || cur.type!=='T' || !cur.spun) return null;
+  const cx = cur.x+1, cy = cur.y+1;             // 3칸 상자의 한가운데
+  const blocked = (x,y) => x<0 || x>=COLS || y>=ROWS || (y>=0 && !!grid[y][x]);
+  let n = 0;
+  for(const [dx,dy] of T_ALL) if(blocked(cx+dx, cy+dy)) n++;
+  if(n < 3) return null;
+  const front = T_FRONT[cur.rot|0].filter(([dx,dy]) => blocked(cx+dx, cy+dy)).length;
+  return (front === 2 || cur.spinKick === 4) ? 'full' : 'mini';
 }
 function hold(){
   if(!canHold) return;
@@ -1138,6 +1268,11 @@ function tick(t){
   if(started && !over && !paused && !awaitingStage){
     dropTimer += dt;
     if(dropTimer >= dropInterval){ softDrop(); }
+    // 바닥에 닿아 있는 동안만 잠글 시간을 잰다
+    if(cur && collides(cur,0,1)){
+      lockTimer += dt;
+      if(lockTimer >= LOCK_DELAY) lockPiece();
+    } else lockTimer = 0;
     // the floor creeps up on later stages — clear fast or drown
     if(stage.rise){
       riseTimer += dt;
@@ -1398,8 +1533,8 @@ window.addEventListener('keydown', e=>{
   if(k==='ArrowLeft'  || k==='KeyA') move(-1);
   else if(k==='ArrowRight' || k==='KeyD') move(1);
   else if(k==='ArrowDown'  || k==='KeyS') softDrop();
-  else if(k==='ArrowUp' || k==='KeyX' || k==='KeyW') rotate();
-  else if(k==='KeyZ'){ rotate(); rotate(); rotate(); }        // 반대로 돌리기
+  else if(k==='ArrowUp' || k==='KeyX' || k==='KeyW') rotate(1);
+  else if(k==='KeyZ') rotate(-1);                             // 반대로 돌리기
   else if(k==='Space'){ e.preventDefault(); hardDrop(); return; }
   else if(k==='KeyC') hold();
   else return;
@@ -1431,7 +1566,7 @@ function doAct(a){
   if(a==='left') move(-1);
   else if(a==='right') move(1);
   else if(a==='down') softDrop();
-  else if(a==='rot') rotate();
+  else if(a==='rot') rotate(1);
   else if(a==='hold') hold();
   else if(a==='drop'){ hardDrop(); draw(); return false; }
   draw();
@@ -1504,7 +1639,7 @@ bc.addEventListener('touchend', e=>{
   if(!started||over){ startGame(); sx=null; return; }
   if(paused){ sx=null; return; }
 
-  if(adx<14 && ady<14 && dt<300){ rotate(); }              // 톡 치면 회전
+  if(adx<14 && ady<14 && dt<300){ rotate(1); }             // 톡 치면 회전
   else if(ady>adx && dy>0 && ady>cellHeight()*4 && dt<320){ hardDrop(); }  // 아래로 확 쓸면 즉시 낙하
   draw(); sx=null;
 }, {passive:true});
