@@ -18,7 +18,13 @@
     --text:#f3ecf5; --muted:#a898b0; --faint:#6f6278;
     --accent:#ffc94d; --accent2:#ff7a9c;
   }
-  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent}
+  /* 폰에서 빠르게 두 번 누르면 화면이 확대되고, 그러면서 글자가 잡혀
+     '복사하기' 딱지가 떴다. 게임 화면에서 글자를 집을 일은 없으니
+     아예 못 잡게 하고, 두 번 눌러 확대하는 것도 막는다.
+     touch-action:manipulation 이 두 번 누르기 확대를 없애는 열쇠다. */
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;
+    -webkit-touch-callout:none; user-select:none; -webkit-user-select:none}
+  html,body{touch-action:manipulation; overscroll-behavior:none}
   body{
     font-family:"Pretendard","Apple SD Gothic Neo",-apple-system,BlinkMacSystemFont,
       "Segoe UI",system-ui,sans-serif;
