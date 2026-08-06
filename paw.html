@@ -161,7 +161,7 @@
   <span><b>✨ 황금쥐</b> +80</span>
   <span><b>🍤 츄르</b> 시간 +1.5초</span>
   <span><b>🐱 고양이</b> 때리면 −20점, 시간 −1초</span>
-  <span><b>연속</b> 5번마다 ×0.5씩, 최대 ×3</span>
+  <span><b>연속</b> 5번마다 ×0.5씩, 최대 ×8</span>
 </div>
 
 <script>
@@ -244,6 +244,7 @@ let goalAt = -1;                      // 목표를 처음 넘긴 순간의 남�
 let perfectRun = 0;                   // 무실수로 이어 온 탄 수
 let banner = null;                    // 탄 이름 띠
 let between = 0;                      // 탄과 탄 사이 잠깐 멈춤
+let intro = 0;                        // 탄 안내를 보여 주는 동안
 
 /* ---------------- 타격감 ----------------
    맞은 게 스르르 들어가면 때린 맛이 안 난다. 세 가지를 겹친다.
@@ -283,11 +284,14 @@ function rollKind() {
 }
 
 /* ---------------- 연속 가중치 ----------------
-   다섯 번 이어 맞힐 때마다 배수가 반씩 오른다. 스무 번을 이으면 세 배.
+   다섯 번 이어 맞힐 때마다 배수가 반씩 오른다. 스무 번이면 세 배,
+   일흔 번이면 여덟 배. 이어 갈수록 값이 가팔라진다.
+
    한 마리 한 마리의 값이 아니라 '끊기지 않고 가는 것' 자체가 점수가 된다.
    그래서 애매한 놈을 무리해서 치기보다, 확실한 것만 골라 이어 가는 판단이
-   생긴다. 고양이를 치거나 쥐를 놓치면 그 자리에서 1배로 돌아간다. */
-const COMBO_STEP = 5, COMBO_MAX = 3;
+   생긴다. 고양이를 치거나 쥐를 놓치면 그 자리에서 1배로 돌아간다 —
+   길게 이었을수록 잃는 게 커서, 뒤로 갈수록 손이 떨린다. */
+const COMBO_STEP = 5, COMBO_MAX = 8;
 const comboMult = () => Math.min(COMBO_MAX, 1 + Math.floor(combo / COMBO_STEP) * 0.5);
 
 function popOne() {
@@ -669,12 +673,13 @@ function draw() {
   if (combo >= 2) {
     const m = comboMult();
     cx.textAlign = 'center';
-    cx.fillStyle = m >= 3 ? '#ffd75e' : (m >= 2 ? '#ffb38a' : '#9fe8c0');
+    cx.fillStyle = m >= 5 ? '#ff8fb0' : (m >= 3 ? '#ffd75e' : (m >= 2 ? '#ffb38a' : '#9fe8c0'));
     cx.font = '900 20px "Pretendard",system-ui,sans-serif';
     cx.fillText(combo + '연속', W / 2, 20);
     if (m > 1) {
-      cx.font = '900 15px "Pretendard",system-ui,sans-serif';
-      cx.fillText('×' + m, W / 2, 38);
+      // 배수가 클수록 글자도 커진다. 얼마나 크게 쌓였는지가 눈에 보여야 아깝다.
+      cx.font = `900 ${Math.round(15 + (m - 1) * 3)}px "Pretendard",system-ui,sans-serif`;
+      cx.fillText('×' + m, W / 2, 42);
     }
     cx.textAlign = 'start';
   }
@@ -740,9 +745,12 @@ function beginStage(i) {
   stageTime = STAGE_TIME;
   stageScore = 0;
   stageMiss = 0; stageOops = 0; goalAt = -1;
-  spawnTimer = 0.5;
+  spawnTimer = 0.25;
   for (const h of HOLES) { h.occ = null; }
-  showBanner(stage.n + '탄 · ' + stage.name, '목표 ' + stage.goal.toLocaleString('ko-KR') + '점', '#ffd15b');
+  showBanner(stage.n + '탄 · ' + stage.name, '목표 ' + stage.goal.toLocaleString('ko-KR') + '점', '#ffd15b', 1.5);
+  // 안내를 보여 주는 동안은 아무것도 안 나오고 시간도 안 간다.
+  // 띠가 판 한가운데를 덮는데 그 밑에서 쥐가 나오면 못 본 채로 놓친다.
+  intro = 1.5;
   refreshHud();
   stageStart();
 }
@@ -799,6 +807,9 @@ function step(dt) {
     if (between <= 0) beginStage(stageIdx + 1);
     return;
   }
+
+  // 안내가 뜬 동안은 판이 멈춰 있다. 띠가 걷히고 나서 시작한다.
+  if (intro > 0) { intro -= dt; return; }
 
   stageTime -= dt;
   // 탄은 끝까지 간다. 목표를 일찍 채워도 남은 시간은 점수를 더 벌 시간이다.
@@ -860,7 +871,7 @@ function refreshHud() {
 function newGame() {
   score = 0; combo = 0; bestCombo = 0;
   hits = 0; misses = 0; oops = 0; golds = 0;
-  perfectRun = 0; between = 0;
+  perfectRun = 0; between = 0; intro = 0;
   texts = []; parts = []; paws = []; flash = 0; shake = 0; banner = null;
   rings = []; flying = []; hitStop = 0;
   for (const h of HOLES) { h.occ = null; h.shake = 0; }
