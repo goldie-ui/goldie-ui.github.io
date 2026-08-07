@@ -441,10 +441,18 @@ let awaitingStage = false, pendingStage = null, overlayMode = 'start';
 // 7탄에서 멈추지도 않는다. 예전엔 거기서 배수가 ×7 에 못박혀 아무리
 // 잘해도 점수가 더 안 올랐다. 그 뒤로는 25줄마다 한 탄씩 계속 오른다.
 const STAGE_STEP = 25;
-// 점수 배수 상한. 점수 → 구간 → 배수 → 점수 로 돌아오는 되먹임이라,
-// 여기를 안 막으면 한 판에 10의 37제곱 점까지 폭주한다. 구간 자체는
-// 계속 올라가되(더 빨라지고 방해줄도 늘고) 배수만 여기서 멈춘다.
-const MULT_CAP = 12;
+// 점수 배수 상한.
+//
+// 12 로 못 박아 뒀던 건 구간이 '점수' 로 오르던 시절 얘기다. 그때는
+// 점수 → 구간 → 배수 → 점수 로 되먹임이 돌아서 한 판에 10의 37제곱
+// 점까지 폭주했다. 지금은 구간이 '줄 수' 로 오른다(stageFor(lines)).
+// 점수가 구간에 영향을 못 주니 되먹임 고리가 없어졌고, 이 값은 그냥
+// 뚜껑으로만 남아 있었다.
+//
+// 20 으로 연다. 구간은 110줄 뒤로 25줄마다 하나씩 오르니 여기 닿으려면
+// 435줄을 지워야 한다 — 아무도 근처에 못 가 봤다. 폭주 방지용 빗장으로만
+// 남겨 두고, 실제로는 잘하는 만큼 계속 오른다.
+const MULT_CAP = 20;
 const scoreMult = () => Math.min(MULT_CAP, stage.n);
 function stageFor(ln){
   let s = STAGES[0];
@@ -454,6 +462,12 @@ function stageFor(ln){
   const extra = Math.floor((ln - last.at) / STAGE_STEP);
   if(extra <= 0) return last;
   const src = STAGES[(STAGES.length - 1 + extra) % STAGES.length];
+  // 마지막 구간을 넘어서도 계속 조인다.
+  //
+  // 예전엔 중력만 조금 빨라지고 방해줄과 차오르는 바닥은 그대로였다.
+  // 배수만 오르고 위험은 그대로면 뒤 구간이 공짜 점수가 된다.
+  // 이제 방해줄이 두꺼워지고, 바닥이 더 자주 차오르고, I 조각은 더
+  // 귀해진다. 값이 오르는 만큼 값을 치른다.
   return {
     ...last,
     n: last.n + extra,
@@ -461,6 +475,9 @@ function stageFor(ln){
     tint: src.tint, lite: src.lite, key: src.key,
     bpm: Math.min(184, last.bpm + extra * 3),
     gravity: Math.max(85, last.gravity - extra * 10),
+    garbage: Math.min(6, last.garbage + Math.floor(extra / 4)),
+    rise: Math.max(4500, last.rise - extra * 600),
+    iRate: Math.max(0.28, last.iRate - extra * 0.015),
   };
 }
 best = +(localStorage.getItem('cattris_best')||0);
@@ -659,12 +676,19 @@ function clearLines(){
     // 백투백 사슬은 4줄만이 아니라 T-스핀으로도 이어진다.
     const hard = cleared === 4 || !!spin;
 
-    // 백투백은 이제 사슬이다. 4줄을 연달아 낼수록 배수가 계속 커진다.
-    // 예전엔 몇 번을 이어 내든 1.5배로 못박혀서, 잘하는 사람이 더 갈
-    // 데가 없었다. 여기가 점수 천장을 뚫는 첫 번째 자리다.
+    // 백투백 사슬.
+    //
+    // 4줄이나 T-스핀을 연달아 낼수록 배수가 커진다. 상한이 ×3 이라
+    // 네 번만 이어 내면 더 갈 데가 없었다 — 여덟 번을 이어도 값이 같으니
+    // 거기서부터는 굳이 어려운 수를 둘 이유가 없다.
+    //
+    // 이제 여섯 번까지 ×5 로 오른다. 뒤로 갈수록 한 칸이 커져서, 길게
+    // 이을수록 한 방이 가팔라지고 끊겼을 때 잃는 것도 커진다.
+    // 이 게임에서 제일 어려운 기술에 제일 큰 값을 매기는 자리다.
+    const B2B_MULT = [1.5, 2, 2.6, 3.2, 4, 5];
     let b2bMult = 1;
     if(hard){
-      if(b2bChain > 0) b2bMult = Math.min(3, 1 + b2bChain * 0.5);
+      if(b2bChain > 0) b2bMult = B2B_MULT[Math.min(b2bChain, B2B_MULT.length) - 1];
       b2bChain++;
     } else {
       b2bChain = 0;                       // 그냥 2~3줄을 내면 사슬이 끊긴다
@@ -729,9 +753,14 @@ function clearLines(){
     if(churs) { say(`츄르 ${churs}개! +${300*churs*scoreMult()}`, '#ffb38a', 19); churMeow(); }
     if(b2bMult > 1){
       // 사슬이 길수록 크고 뜨겁게 보여 준다
-      const hot = b2bMult >= 3;
-      say(`백투백 ${b2bChain-1}연속! ${b2bMult}배`, hot ? '#ffa24d' : '#8fd9ff', hot ? 26 : 21);
-      if(hot) addShake(9);
+      // 사슬이 길수록 크고 뜨겁게 보여 준다
+      const hot = b2bMult >= 3.2;
+      const blaze = b2bMult >= 5;
+      say(`백투백 ${b2bChain-1}연속! ${b2bMult}배`,
+          blaze ? '#ff6b8a' : (hot ? '#ffa24d' : '#8fd9ff'),
+          blaze ? 30 : (hot ? 26 : 21));
+      if(hot) addShake(blaze ? 15 : 9);
+      if(blaze) edgeFlash = 1;
     }
     if(risk > 1) say(`아슬아슬 ${Math.round((risk-1)*100)}%!`, '#ff8fb0', 20);
     if(combo > 0){
