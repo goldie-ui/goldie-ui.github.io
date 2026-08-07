@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/favicon.png">
+<meta name="theme-color" content="#0e0f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="골디게임">
+<title>츄르 배급</title>
+<style>
+  :root{
+    --bg:#120e18; --board:#1c1526; --line:rgba(255,255,255,.09);
+    --text:#f3eef7; --muted:#a99cb5; --faint:#6f6379;
+    --accent:#ffc94d; --accent2:#ff7a9c;
+    --c0:#ff6b8a; --c1:#4dc9ff; --c2:#7ee08a;
+  }
+  /* 폰에서 빠르게 두 번 누르면 화면이 확대되고, 그러면서 글자가 잡혀
+     '복사하기' 딱지가 떴다. 게임 화면에서 글자를 집을 일은 없으니
+     아예 못 잡게 하고, 두 번 눌러 확대하는 것도 막는다. */
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;
+    -webkit-touch-callout:none; user-select:none; -webkit-user-select:none}
+  html,body{touch-action:manipulation; overscroll-behavior:none}
+  body{
+    font-family:"Pretendard","Apple SD Gothic Neo",-apple-system,BlinkMacSystemFont,
+      "Segoe UI",system-ui,sans-serif;
+    background:radial-gradient(760px 520px at 50% -8%,#33204a 0%,transparent 60%),var(--bg);
+    color:var(--text); min-height:100vh; padding:16px 14px 24px;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .back{align-self:flex-start; color:var(--muted); text-decoration:none; font-size:14px}
+  .back:hover{color:var(--text)}
+  h1{font-size:26px; font-weight:900; letter-spacing:-.03em; margin:6px 0 2px;
+    background:linear-gradient(104deg,#fff,#ffd97a 55%,#ff9ec8);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  .sub{color:var(--faint); font-size:12px; margin-bottom:10px}
+
+  .hud{width:100%; max-width:400px; display:flex; align-items:stretch; gap:8px; margin-bottom:8px}
+  .score{flex:1; background:var(--board); border:1px solid var(--line); border-radius:13px;
+    padding:7px 11px}
+  .score .k{font-size:10px; color:var(--faint); letter-spacing:.1em; text-transform:uppercase}
+  .score .v{font-size:20px; font-weight:900; font-variant-numeric:tabular-nums; line-height:1.15}
+  .score.warn .v{color:#ff8f8f}
+
+  /* 몇 마리 먹였고 얼마나 정확한지 */
+  .goal{width:100%; max-width:400px; display:flex; align-items:center; gap:9px;
+    margin:0 auto 8px; font-size:11.5px; color:var(--muted)}
+  .goal .st{white-space:nowrap}
+  .goal .st b{color:var(--accent); font-weight:800}
+  .goal .st i{font-style:normal; color:var(--faint)}
+  .goal .bar{flex:1; height:6px; border-radius:99px;
+    background:rgba(255,255,255,.10); overflow:hidden}
+  .goal .bar i{display:block; height:100%; width:0;
+    background:linear-gradient(90deg,#7ee08a,#ffc94d); transition:width .18s ease}
+  .goal .num{white-space:nowrap; font-variant-numeric:tabular-nums}
+  .goal .num b{color:var(--text); font-weight:800}
+
+  /* 지금 1등을 쫓는 띠. 앱에서 켜야 순위가 넘어온다. */
+  .chase{width:100%; max-width:400px; display:flex; align-items:center; gap:9px;
+    margin:0 auto 10px; font-size:11.5px; color:#ff9fbb}
+  .chase.hide{display:none}
+  .chase .who{font-weight:700; white-space:nowrap; max-width:34%;
+    overflow:hidden; text-overflow:ellipsis}
+  .chase .bar{flex:1; height:5px; border-radius:99px;
+    background:rgba(255,255,255,.10); overflow:hidden}
+  .chase .bar i{display:block; height:100%; width:0;
+    background:linear-gradient(90deg,#ff8fb0,#ffd85b); transition:width .35s ease}
+  .chase .val{font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .chase.won{color:#ffd85b}
+  .chase.won .bar i{background:#ffd85b; animation:chasePulse 1.1s ease-in-out infinite}
+  @keyframes chasePulse{50%{opacity:.4}}
+
+  .stage{position:relative; width:100%; max-width:340px}
+  canvas{display:block; width:100%; height:auto; background:var(--board);
+    border:1px solid var(--line); border-radius:16px; touch-action:none;
+    aspect-ratio:19/22}
+
+  .screen{position:absolute; inset:0; border-radius:16px; z-index:5;
+    background:rgba(16,11,22,.96);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:12px; padding:20px; text-align:center}
+  .screen.hide{display:none}
+  .screen h2{font-size:25px; font-weight:900}
+  .screen p{color:var(--muted); font-size:13px; line-height:1.6}
+  .btn{background:linear-gradient(120deg,var(--accent),var(--accent2)); color:#2a1500;
+    border:none; border-radius:13px; padding:12px 30px; font-weight:900; font-size:16px;
+    cursor:pointer}
+  .btn:active{transform:scale(.97)}
+
+  /* 색 버튼. 오락실 그대로 아래에 고정해 둔다 — 손가락이 자리를 외우면
+     화면을 안 보고도 치게 된다. 그게 이 게임의 맛이다. */
+  .pads{width:100%; max-width:400px; margin-top:12px; display:flex; gap:9px}
+  /* 글자를 뺐다. 색과 츄르 그림만 있으면 무슨 버튼인지 바로 안다.
+     글자를 읽고 있으면 이미 늦는 게임이라, 읽을 게 없는 편이 낫다. */
+  .pad{
+    flex:1; height:82px; border:none; border-radius:18px; cursor:pointer;
+    position:relative; box-shadow:0 5px 0 rgba(0,0,0,.35);
+    transition:transform .06s, box-shadow .06s;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .pad svg{height:70%; width:auto; display:block; filter:drop-shadow(0 2px 3px rgba(0,0,0,.25))}
+  .pad:active, .pad.down{ transform:translateY(4px); box-shadow:0 1px 0 rgba(0,0,0,.35) }
+  .pad.p0{background:linear-gradient(160deg,#ff9db1,var(--c0))}
+  .pad.p1{background:linear-gradient(160deg,#9ee0ff,var(--c1))}
+  .pad.p2{background:linear-gradient(160deg,#b6f0c2,var(--c2))}
+  .pad.wrong{animation:padNo .3s}
+  @keyframes padNo{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+  .hint{width:100%; max-width:400px; margin-top:10px; text-align:center;
+    font-size:10.5px; color:var(--faint); line-height:1.7}
+  .hint b{color:var(--muted); font-weight:700}
+
+  @media (max-width:640px){
+    body{padding:12px 12px 14px}
+    h1{font-size:22px}
+    .sub{font-size:11px; margin-bottom:8px}
+    .score{padding:6px 9px}
+    .score .v{font-size:18px}
+    .pad{height:76px}
+  }
+</style>
+</head>
+<body>
+<a class="back" href="index.html">← 골디 게임</a>
+<h1>🍤 츄르 배급</h1>
+<div class="sub">60초 동안 최대한 많은 냥에게</div>
+
+<div class="hud">
+  <div class="score"><div class="k">점수</div><div class="v" id="score">0</div></div>
+  <div class="score"><div class="k">최고</div><div class="v" id="best">0</div></div>
+  <div class="score" id="timeBox"><div class="k">남은 시간</div><div class="v" id="time">60</div></div>
+</div>
+
+<div class="goal">
+  <span class="st">배급 <b id="served">0</b>마리</span>
+  <span class="bar" id="goalBar"><i id="goalFill"></i></span>
+  <span class="num">정확도 <b id="acc">100</b>%</span>
+</div>
+
+<div class="chase hide" id="chase">
+  <span class="who" id="chaseWho">1등</span>
+  <span class="bar"><i id="chaseFill"></i></span>
+  <span class="val" id="chaseVal">0</span>
+</div>
+
+<div class="stage">
+  <canvas id="cv" width="380" height="440"></canvas>
+  <div class="screen" id="startScreen">
+    <h2>🍤 츄르 배급</h2>
+    <p>고양이들이 줄을 섰어요.<br>
+       <b>맨 앞 냥의 색</b>과 같은 츄르를 눌러 주세요.<br>
+       <b>60초</b> 동안 최대한 많이!</p>
+    <button class="btn" id="startBtn">시작</button>
+  </div>
+  <div class="screen hide" id="overScreen">
+    <h2 id="overTitle">끝!</h2>
+    <p id="overText"></p>
+    <button class="btn" id="retryBtn">다시 하기</button>
+  </div>
+</div>
+
+<div class="pads" id="pads">
+  <button class="pad p0" data-c="0" aria-label="분홍 츄르">
+    <svg viewBox="0 0 44 68"><use href="#churu"/></svg></button>
+  <button class="pad p1" data-c="1" aria-label="파랑 츄르">
+    <svg viewBox="0 0 44 68"><use href="#churu"/></svg></button>
+  <button class="pad p2" data-c="2" aria-label="초록 츄르">
+    <svg viewBox="0 0 44 68"><use href="#churu"/></svg></button>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <!-- 츄르 봉지. 위아래 오글오글한 부분이 있어야 봉지로 보인다.
+       처음엔 가는 둥근 막대라 흰 줄 하나로만 보였다. 통통하게 키우고
+       주름 대비를 올렸다. -->
+  <g id="churu">
+    <rect x="4"  y="2"  width="36" height="12" rx="4" fill="rgba(255,255,255,.72)"/>
+    <path d="M9 3v10M15 3v10M21 3v10M27 3v10M33 3v10"
+          stroke="rgba(0,0,0,.22)" stroke-width="1.8" stroke-linecap="round"/>
+    <rect x="8"  y="12" width="28" height="44" rx="12" fill="#fff"/>
+    <rect x="13" y="18" width="7"  height="30" rx="3.5" fill="rgba(255,255,255,.92)"/>
+    <rect x="26" y="22" width="4"  height="22" rx="2" fill="rgba(0,0,0,.10)"/>
+    <rect x="4"  y="54" width="36" height="12" rx="4" fill="rgba(255,255,255,.72)"/>
+    <path d="M9 55v10M15 55v10M21 55v10M27 55v10M33 55v10"
+          stroke="rgba(0,0,0,.22)" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+</defs></svg>
+
+<p class="hint">
+  <b>🌟 황금냥</b> 아무 색이나 · <b>😴 잠꾸러기</b> 두 번 · <b>🙈 가면냥</b> 색을 가려요<br>
+  <b>10마리 무실수</b>면 시간 +1.5초 · 틀리면 <b>시간이 깎이고</b> 연속이 끊겨요
+</p>
+
+<script>
+const cv = document.getElementById('cv');
+// 판은 속이 꽉 찬 그림이다(alpha:false). 투명하게 두면 iOS 가 프레임마다
+// 배경 위에 겹쳐 합성하다가 옛 조각을 남긴다 — 냥냥펀치에서 겪은 일이다.
+const cx = cv.getContext('2d', { alpha: false });
+const BOARD_BG = '#1c1526';
+const $ = s => document.querySelector(s);
+
+let W = 400, H = 300;
+
+// 그림 버퍼를 화면에 보이는 크기에 정확히 맞춘다. 늘려 쓰면 iOS 가
+// GPU 에서 늘리다 조각을 놓쳐서 판이 어긋나 보인다.
+function layout() {
+  const r = cv.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  W = Math.max(240, Math.round(r.width));
+  H = Math.max(260, Math.round(r.height));
+  cv.width = Math.round(W * dpr);
+  cv.height = Math.round(H * dpr);
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+/* ---------------- 색 ----------------
+   셋으로 정했다. 넷이면 오락실에 가깝지만 폰에서 엄지 둘로 치기 벅차다.
+   대신 찍어서 맞을 확률이 3분의 1이나 되니, 어려움은 색 수가 아니라
+   속도와 특수 냥으로 만든다. */
+const COLORS = [
+  { name: '딸기',   c: '#ff6b8a', c2: '#c93a5c' },
+  { name: '참치',   c: '#4dc9ff', c2: '#2b8cbd' },
+  { name: '닭가슴', c: '#7ee08a', c2: '#46a55a' },
+];
+
+/* ---------------- 탄 ----------------
+   한 탄은 줄 하나다. 제한 시간 안에 다 비우면 다음 탄, 못 비우면 끝.
+   뒤로 갈수록 줄이 길어지고 시간은 조금씩만 늘어난다 — 그래서 한 마리에
+   쓸 수 있는 시간이 계속 줄어든다. 그게 이 게임의 조임쇠다. */
+/* ---------------- 한 판 ----------------
+   탄으로 나누지 않는다. 육십 초 동안 몇 마리를 먹였느냐, 그거 하나로
+   겨룬다. 줄은 끝이 없고 먹인 만큼 뒤에서 채워진다.
+
+   시간을 늘려 주는 장치는 일부러 안 넣었다. 판 길이가 사람마다 달라지면
+   점수를 나란히 놓고 볼 수가 없다. 모두 똑같이 육십 초다.
+
+   대신 먹일수록 까다로운 냥이 늘어난다. 잠꾸러기는 두 번 눌러야 하고
+   가면냥은 색을 가리니, 뒤로 갈수록 한 마리에 드는 시간이 길어진다. */
+const ROUND = 60;
+const QUEUE_LEN = 12;              // 화면 뒤로 늘 이만큼은 서 있게 채운다
+
+// 얼마나 먹였는지에 따라 까다로운 냥이 섞이는 비율.
+const ramp = () => Math.min(1, served / 45);
+const rateGold   = () => 0.10 - 0.05 * ramp();
+const rateSleepy = () => 0.05 + 0.16 * ramp();
+const rateMasked = () => 0.03 + 0.15 * ramp();
+
+/* ---------------- 연속 배수 ----------------
+   아래를 촘촘히 깔아 둘만 이어도 붙고, 위로 갈수록 간격을 벌린다.
+   냥냥펀치에서 재 보고 자리 잡은 모양을 그대로 쓴다. */
+const COMBO_TIERS = [
+  { at: 2,  m: 1.2 }, { at: 4,  m: 1.5 }, { at: 7,  m: 2   },
+  { at: 11, m: 2.5 }, { at: 16, m: 3   }, { at: 22, m: 4   },
+  { at: 30, m: 5   }, { at: 40, m: 6.5 }, { at: 55, m: 8   },
+];
+const COMBO_MAX = 8;
+function comboMult() {
+  let m = 1;
+  for (const t of COMBO_TIERS) { if (combo >= t.at) m = t.m; else break; }
+  return m;
+}
+
+const BASE = 20;              // 한 마리 기본 점수
+// 틀리면 깎이는 시간.
+//
+// 1.2초로 뒀더니 서툰 사람은 판이 49초로 줄어서, 점수를 덜 받는 데다
+// 놀 시간까지 잃는 이중 손해였다. 점수 폭이 스물한 배까지 벌어졌다.
+// 0.8초로 낮춰서 벌은 남기되 판이 너무 짧아지지는 않게 한다.
+const WRONG_TIME = 0.8;
+
+/* ---------------- 무실수 시간 보너스 ----------------
+   열 마리를 한 번도 안 틀리고 넘기면 1.5초를 돌려준다.
+
+   냥탑의 츄르처럼 운으로 굴러오는 게 아니라 연속으로 벌어야만 나온다.
+   그래서 판이 길어지는 만큼이 곧 실력이다.
+
+   달아나지 않게 값을 맞췄다. 빠른 사람이 열 마리를 치는 데 2.8초쯤
+   걸리는데 돌려주는 건 1.5초라, 아무리 잘해도 쓰는 시간이 더 크다.
+   그래도 혹시 몰라 한 판 최대 90초로 못을 박아 둔다. */
+const CLEAN_TIME = 1.5;
+const MAX_TIME = 90;
+
+let queue = [];               // 줄. 0 번이 맨 앞이다.
+let score = 0, best = 0, combo = 0, bestCombo = 0;
+let served = 0, wrongs = 0, golds = 0;
+let timeLeft = ROUND;
+let playing = false, over = false, raf = null, lastT = 0;
+let intro = 0, banner = null;
+let texts = [], bits = [], slide = 0, flash = 0, shakeT = 0;
+// 츄르를 받고 폴짝 떠나는 냥들. 그냥 사라지면 준 맛이 안 난다.
+let leaving = [];
+// 때린 자리에서 퍼지는 고리
+let rings = [];
+// 맨 앞 냥이 숨 쉬는 박자. 가만히 있으면 그림 같아서 조금씩 움직인다.
+let breath = 0;
+// 틀렸을 때 앞 냥이 고개를 젓는 정도
+let refuse = 0;
+let wrongsIn10 = 0;            // 지금 열 마리 묶음에서 틀린 횟수
+
+const BEST_KEY = 'churu_best';
+try { best = +(localStorage.getItem(BEST_KEY) || 0); } catch (e) {}
+$('#best').textContent = best.toLocaleString('ko-KR');
+
+// 최고점은 판이 끝났을 때만 적는다. 노는 도중에 적으면 바깥 앱이 그걸
+// 5초마다 읽어다 올려서, 한 판에 순위 알림이 몇 번씩 울린다.
+window.saveBest = function () {
+  try {
+    if (score > best) best = score;
+    if (best > 0) localStorage.setItem(BEST_KEY, best);
+  } catch (e) {}
+};
+addEventListener('pagehide', window.saveBest);
+
+/* ---------------- 줄 세우기 ---------------- */
+// 줄은 끝이 없다. 앞에서 빠지는 만큼 뒤에서 채운다.
+function refill() {
+  while (queue.length < QUEUE_LEN) {
+    const r = Math.random();
+    const g = rateGold(), sl = rateSleepy(), mk = rateMasked();
+    let kind = 'plain';
+    if (r < g) kind = 'gold';
+    else if (r < g + sl) kind = 'sleepy';
+    else if (r < g + sl + mk) kind = 'masked';
+
+    // 같은 색이 넷 넘게 이어지면 손이 굳는다. 눈으로 세기도 지겹다.
+    let c = (Math.random() * COLORS.length) | 0;
+    const n = queue.length;
+    if (n >= 3 && queue[n-1].c === c && queue[n-2].c === c && queue[n-3].c === c) {
+      c = (c + 1 + ((Math.random() * (COLORS.length - 1)) | 0)) % COLORS.length;
+    }
+    queue.push({ c, kind, need: kind === 'sleepy' ? 2 : 1, wake: 0, hide: Math.random() * 2 });
+  }
+}
+
+/* ---------------- 누르기 ---------------- */
+function press(ci) {
+  if (!playing || over || intro > 0) return;
+  const head = queue[0];
+  if (!head) return;
+
+  const ok = head.kind === 'gold' || head.c === ci;
+  if (!ok) {
+    // 틀렸다. 시간이 깎이고 연속이 끊긴다.
+    // 이 게임에서 가장 아픈 건 점수보다 시간이다 — 육십 초가 전부라서.
+    wrongs++;
+    combo = 0;
+    timeLeft = Math.max(0, timeLeft - WRONG_TIME);
+    wrongsIn10++;
+    say('앗! −' + WRONG_TIME + '초', '#ff8f8f', 22);
+    padNo(ci);
+    refuse = 1;                 // 앞 냥이 고개를 젓는다
+    rings.push({ x: W / 2, y: H - 74, r: 24, life: 1, col: '#ff8f8f' });
+    shakeT = 0.25; wrong();
+    refreshHud();
+    return;
+  }
+
+  head.need--;
+  if (head.need > 0) {
+    // 잠꾸러기는 한 번 더 눌러야 일어난다.
+    head.wake = 1;
+    say('깨는 중…', '#ffd15b', 16);
+    blip(520);
+    return;
+  }
+
+  // 이 냥은 츄르를 받고 빠진다.
+  //
+  // 연속 배수를 곱한 값이 곧 이 한 마리의 값이다. 스무 점짜리가 여덟 배면
+  // 백육십 점이니, 이어 가는 것 자체가 이 게임에서 가장 큰 점수원이다.
+  const m = comboMult();
+  let gain = Math.round(BASE * m);
+  if (head.kind === 'gold') { gain = Math.round(gain * 1.5); golds++; }
+  const comboAdd = gain - BASE;      // 연속 덕분에 더 받은 몫
+  score += gain;
+  served++;
+  combo++;
+  if (combo > bestCombo) bestCombo = combo;
+
+  // 받은 냥은 츄르를 물고 폴짝 뛰어 옆으로 빠진다
+  const side = Math.random() < 0.5 ? -1 : 1;
+  leaving.push({ cat: head, x: W / 2, y: H - 74,
+                 vx: side * (150 + Math.random() * 80), vy: -300 - Math.random() * 90,
+                 rot: 0, vr: side * (3 + Math.random() * 3), life: 1 });
+  rings.push({ x: W / 2, y: H - 74, r: 26, life: 1,
+               col: head.kind === 'gold' ? '#ffd75e' : COLORS[head.c].c });
+  bits.push({ x: W / 2, y: H - 74, vx: (Math.random() - 0.5) * 180, vy: -260 - Math.random() * 110,
+              col: head.kind === 'gold' ? '#ffd75e' : COLORS[head.c].c, life: 1,
+              rot: 0, vr: (Math.random() - 0.5) * 16 });
+  // 배수가 붙었으면 얼마를 더 받았는지까지 보여 준다. '×2.5' 만 뜨면
+  // 그게 몇 점인지 감이 안 온다.
+  say('+' + gain, head.kind === 'gold' ? '#ffd75e' : '#9fe8c0', m > 1 ? 24 : 20);
+  if (m > 1) say('연속 ×' + m + ' 덕에 +' + comboAdd, '#ffb38a', 15, 26);
+  if (COMBO_TIERS.some(t => t.at === combo)) {
+    say(combo + '연속! ×' + comboMult(), combo >= 16 ? '#ffd75e' : '#9fe8c0', 24, 30);
+    const col = combo >= 16 ? '#ffd75e' : '#9fe8c0';
+    rings.push({ x: W / 2, y: H - 74, r: 20, life: 1.0, col });
+    rings.push({ x: W / 2, y: H - 74, r: 20, life: 0.7, col });
+    flash = Math.max(flash, 0.5);
+    ding();
+  }
+  chime(head.c, Math.min(combo, 12));
+
+  // 열 마리를 채울 때마다 한 번씩 크게 준다. 탄이 없어진 대신 여기가
+  // 숨 고르는 지점이 된다. 그 열 마리를 안 틀리고 넘겼으면 더 크게.
+  if (served % 10 === 0) {
+    const clean = wrongsIn10 === 0;
+    if (clean) perfectRun++; else perfectRun = 0;
+    const bonus = 100 + (clean ? Math.round(150 * Math.min(2.5, 1 + 0.25 * (perfectRun - 1))) : 0);
+    score += bonus;
+    if (clean) {
+      timeLeft = Math.min(MAX_TIME, timeLeft + CLEAN_TIME);
+      $('#time').textContent = Math.ceil(timeLeft);
+      say(served + '마리 무실수! +' + bonus, '#ffd75e', 24, 30);
+      say('시간 +' + CLEAN_TIME + '초', '#7de8ff', 18, 56);
+      rings.push({ x: W / 2, y: H - 74, r: 24, life: 1.1, col: '#7de8ff' });
+    } else {
+      say(served + '마리! +' + bonus, '#9fe8c0', 24, 30);
+    }
+    flash = 0.8; fanfare();
+    for (let i = 0; i < 16; i++) {
+      const a = Math.random() * 6.283, sp = 60 + Math.random() * 170;
+      bits.push({ x: W / 2, y: H * 0.5, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 70,
+                  col: clean ? '#ffd75e' : '#7ee08a', life: 1, rot: 0, vr: (Math.random() - 0.5) * 14 });
+    }
+    wrongsIn10 = 0;
+  }
+
+  queue.shift();
+  refill();
+  slide = 1;                    // 줄이 당겨지는 동안 부드럽게 민다
+  refreshHud();
+  bumpChase(score);
+}
+
+function padNo(ci) {
+  const el = document.querySelector('.pad[data-c="' + ci + '"]');
+  if (!el) return;
+  el.classList.remove('wrong'); void el.offsetWidth; el.classList.add('wrong');
+}
+
+/* ---------------- 안내 띠 ---------------- */
+function showBanner(top, bottom, col, life) {
+  banner = { top, bottom, col, t: 0, life: life || 1.5 };
+}
+
+let perfectRun = 0;             // 안 틀리고 이어 온 열 마리 묶음 수
+
+// 판 위에 처리한 마릿수와 정확도를 적는다.
+function refreshHud() {
+  $('#served').textContent = served;
+  const total = served + wrongs;
+  $('#acc').textContent = total ? Math.round(served / total * 100) : 100;
+  // 막대는 지금 판의 최고 기록까지 얼마나 왔는지 보여 준다.
+  const goal = Math.max(20, best ? Math.round(best / 40) : 30);
+  $('#goalFill').style.width = Math.min(100, served / goal * 100) + '%';
+  $('#score').textContent = score.toLocaleString('ko-KR');
+  if (score > best) { best = score; $('#best').textContent = best.toLocaleString('ko-KR'); }
+}
+
+function say(str, col, size, dy) {
+  texts.push({ x: W / 2, y: Math.max(52, H * 0.30 + (dy || 0)), str, col, size, life: 1, vy: -32 });
+}
+
+/* ---------------- 그리기 ---------------- */
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+
+// 고양이 하나 — 몸까지 그린다.
+//
+// 처음엔 얼굴만 동동 떠 있었는데 인형 같고 줄 서 있다는 느낌이 안 났다.
+// 몸통과 앞발, 꼬리를 붙이니 그제야 '차례를 기다리는 고양이' 로 보인다.
+// y 는 얼굴 한가운데다. 몸은 그 아래로 자란다.
+function drawCat(x, y, r, cat, front) {
+  const gold = cat.kind === 'gold';
+  const col  = gold ? '#ffd75e' : COLORS[cat.c].c;
+  const dark = gold ? '#e0a017' : COLORS[cat.c].c2;
+  const hidden = cat.kind === 'masked' && !front && Math.sin(cat.hide * 2.2) > 0.2;
+  const asleep = cat.kind === 'sleepy' && cat.need > 1;
+  const body = hidden ? '#544b62' : col;
+  const bodyDark = hidden ? '#3d3649' : dark;
+
+  cx.save(); cx.translate(x, y);
+  if (cat.wake > 0) cx.rotate(Math.sin(cat.wake * 40) * 0.1);
+
+  // 꼬리 — 몸 뒤에서 살랑
+  const wag = Math.sin(cat.hide * 2.4 + x) * 0.28;
+  cx.strokeStyle = bodyDark;
+  cx.lineWidth = r * 0.26; cx.lineCap = 'round';
+  cx.beginPath();
+  cx.moveTo(r * 0.62, r * 1.30);
+  cx.quadraticCurveTo(r * 1.30, r * (1.20 + wag), r * 1.16, r * (0.55 + wag));
+  cx.stroke();
+
+  // 몸통
+  cx.fillStyle = body;
+  cx.beginPath();
+  cx.ellipse(0, r * 1.10, r * 0.72, r * 0.62, 0, 0, 6.284);
+  cx.fill();
+  // 배는 조금 밝게
+  if (!hidden) {
+    cx.fillStyle = 'rgba(255,255,255,.35)';
+    cx.beginPath(); cx.ellipse(0, r * 1.22, r * 0.40, r * 0.36, 0, 0, 6.284); cx.fill();
+  }
+  // 앞발 둘
+  cx.fillStyle = hidden ? '#635a72' : '#fff9f2';
+  for (const sd of [-1, 1]) {
+    cx.beginPath(); cx.ellipse(sd * r * 0.34, r * 1.56, r * 0.21, r * 0.14, 0, 0, 6.284); cx.fill();
+  }
+
+  // 귀 — 머리 뒤로 삐죽
+  cx.fillStyle = hidden ? '#4a4256' : dark;
+  for (const sd of [-1, 1]) {
+    cx.beginPath();
+    cx.moveTo(sd * r * 0.80, -r * 0.44);
+    cx.lineTo(sd * r * 0.92, -r * 1.08);
+    cx.lineTo(sd * r * 0.16, -r * 0.80);
+    cx.closePath(); cx.fill();
+  }
+  if (!hidden) {
+    cx.fillStyle = 'rgba(255,150,180,.6)';
+    for (const sd of [-1, 1]) {
+      cx.beginPath();
+      cx.moveTo(sd * r * 0.70, -r * 0.52);
+      cx.lineTo(sd * r * 0.78, -r * 0.94);
+      cx.lineTo(sd * r * 0.32, -r * 0.75);
+      cx.closePath(); cx.fill();
+    }
+  }
+
+  // 얼굴
+  const g = cx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.15, 0, 0, r);
+  if (hidden) { g.addColorStop(0, '#6b6178'); g.addColorStop(1, '#453d52'); }
+  else { g.addColorStop(0, '#fffdfa'); g.addColorStop(1, col); }
+  cx.fillStyle = g;
+  cx.beginPath(); cx.arc(0, 0, r * 0.9, 0, 6.284); cx.fill();
+  cx.strokeStyle = 'rgba(0,0,0,.16)'; cx.lineWidth = Math.max(1, r * 0.04);
+  cx.beginPath(); cx.arc(0, 0, r * 0.9 - r * 0.02, 0, 6.284); cx.stroke();
+
+  if (hidden) {
+    cx.fillStyle = '#d8cfe4';
+    cx.font = `900 ${Math.round(r * 0.95)}px "Pretendard",system-ui`;
+    cx.textAlign = 'center'; cx.fillText('?', 0, r * 0.34); cx.textAlign = 'start';
+    cx.restore(); return;
+  }
+
+  // 볼터치 — 눈보다 먼저 깔아야 눈에 분홍이 안 묻는다
+  cx.fillStyle = 'rgba(255,120,150,.30)';
+  for (const sd of [-1, 1]) {
+    cx.beginPath(); cx.ellipse(sd * r * 0.55, r * 0.22, r * 0.21, r * 0.14, 0, 0, 6.284); cx.fill();
+  }
+
+  const eo = r * 0.32, ey = -r * 0.06, er = Math.max(1.4, r * 0.14);
+  if (asleep) {
+    cx.strokeStyle = 'rgba(30,22,38,.85)';
+    cx.lineWidth = Math.max(1.6, r * 0.09); cx.lineCap = 'round';
+    for (const sd of [-1, 1]) {
+      cx.beginPath(); cx.arc(sd * eo, ey, er * 0.9, 0.35, Math.PI - 0.35); cx.stroke();
+    }
+    cx.fillStyle = '#cbb6e8';
+    cx.font = `900 ${Math.round(r * 0.46)}px "Pretendard",system-ui`;
+    cx.textAlign = 'center'; cx.fillText('z', r * 0.74, -r * 0.62); cx.textAlign = 'start';
+  } else {
+    cx.fillStyle = 'rgba(28,22,34,.9)';
+    for (const sd of [-1, 1]) {
+      cx.beginPath(); cx.ellipse(sd * eo, ey, er * 0.88, er, 0, 0, 6.284); cx.fill();
+    }
+    cx.fillStyle = 'rgba(255,255,255,.95)';
+    for (const sd of [-1, 1]) {
+      cx.beginPath(); cx.arc(sd * eo + er * 0.30, ey - er * 0.38, er * 0.36, 0, 6.284); cx.fill();
+    }
+    if (r >= 22) {
+      cx.fillStyle = 'rgba(255,255,255,.6)';
+      for (const sd of [-1, 1]) {
+        cx.beginPath(); cx.arc(sd * eo - er * 0.32, ey + er * 0.36, er * 0.18, 0, 6.284); cx.fill();
+      }
+    }
+  }
+
+  cx.fillStyle = '#ff7a9c';
+  cx.beginPath();
+  cx.moveTo(0, r * 0.32); cx.lineTo(-r * 0.11, r * 0.18); cx.lineTo(r * 0.11, r * 0.18);
+  cx.closePath(); cx.fill();
+  cx.strokeStyle = 'rgba(28,22,34,.6)'; cx.lineWidth = Math.max(1, r * 0.038); cx.lineCap = 'round';
+  cx.beginPath();
+  cx.moveTo(0, r * 0.32); cx.lineTo(0, r * 0.44);
+  cx.moveTo(0, r * 0.44); cx.quadraticCurveTo(-r * 0.16, r * 0.58, -r * 0.27, r * 0.40);
+  cx.moveTo(0, r * 0.44); cx.quadraticCurveTo( r * 0.16, r * 0.58,  r * 0.27, r * 0.40);
+  cx.stroke();
+
+  if (r >= 24) {
+    cx.strokeStyle = 'rgba(255,255,255,.45)'; cx.lineWidth = Math.max(1, r * 0.03);
+    cx.beginPath();
+    cx.moveTo(-r * 0.34, r * 0.24); cx.lineTo(-r * 0.95, r * 0.14);
+    cx.moveTo(-r * 0.34, r * 0.36); cx.lineTo(-r * 0.93, r * 0.44);
+    cx.moveTo( r * 0.34, r * 0.24); cx.lineTo( r * 0.95, r * 0.14);
+    cx.moveTo( r * 0.34, r * 0.36); cx.lineTo( r * 0.93, r * 0.44);
+    cx.stroke();
+  }
+
+  if (gold) {
+    cx.fillStyle = 'rgba(255,255,255,.9)';
+    for (const [sx, sy, ss] of [[-0.62, -0.18, 0.12], [0.58, 0.24, 0.09]]) {
+      cx.beginPath();
+      for (let k = 0; k < 8; k++) {
+        const a = k / 8 * 6.284, rad = (k % 2 ? ss * 0.4 : ss) * r;
+        cx.lineTo(sx * r + Math.cos(a) * rad, sy * r + Math.sin(a) * rad);
+      }
+      cx.closePath(); cx.fill();
+    }
+    if (r >= 24) {
+      cx.fillStyle = '#fff0a8';
+      cx.beginPath();
+      cx.moveTo(-r * 0.30, -r * 0.88); cx.lineTo(-r * 0.19, -r * 1.14); cx.lineTo(0, -r * 0.94);
+      cx.lineTo(r * 0.19, -r * 1.14); cx.lineTo(r * 0.30, -r * 0.88);
+      cx.closePath(); cx.fill();
+    }
+  }
+  cx.restore();
+}
+
+function draw() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);   // 무슨 일이 있어도 프레임은 깨끗하게 시작
+  cx.fillStyle = BOARD_BG;
+  cx.fillRect(0, 0, W, H);
+
+  cx.save();
+  if (shakeT > 0) cx.translate((Math.random() - 0.5) * shakeT * 20, (Math.random() - 0.5) * shakeT * 12);
+
+  if (flash > 0) {
+    cx.fillStyle = `rgba(255,201,77,${flash * 0.2})`;
+    cx.fillRect(0, 0, W, H);
+  }
+
+  /* 줄은 위에서 아래로 내려온다.
+     맨 앞이 맨 아래 — 버튼 바로 위다. 손가락이 짚을 자리와 봐야 할 자리가
+     붙어 있어야 눈이 왔다 갔다 안 한다. 옆으로 늘어놓았을 때는 맨 앞이
+     왼쪽 끝이라 시선이 계속 대각선으로 움직였다. */
+  const midX = W / 2;
+  const FRONT_Y = H - 74;         // 맨 앞 냥이 서는 자리
+  const GAP = 84;          // 몸까지 그리니 이만큼은 벌려야 안 겹친다
+  const off = slide * GAP;
+
+  // 배급대 — 맨 앞 냥이 서는 자리.
+  // 테두리가 그 냥의 색으로 맥박친다. 눌러야 할 색이 자리에도 뜨니
+  // 얼굴을 못 봤어도 손이 먼저 간다.
+  const head0 = queue[0];
+  const hc = head0
+    ? (head0.kind === 'gold' ? '#ffd75e'
+       : (head0.kind === 'masked' ? '#8a7f9c' : COLORS[head0.c].c))
+    : '#ffc94d';
+  const pulse = 0.55 + Math.sin(breath * 4.2) * 0.25;
+  cx.fillStyle = 'rgba(255,255,255,.05)';
+  roundRect(cx, midX - 62, FRONT_Y - 46, 124, 108, 20); cx.fill();
+  cx.save();
+  cx.shadowColor = hc; cx.shadowBlur = 14 * pulse;
+  cx.strokeStyle = hc; cx.globalAlpha = pulse;
+  cx.lineWidth = 2.5;
+  roundRect(cx, midX - 62, FRONT_Y - 46, 124, 108, 20); cx.stroke();
+  cx.restore();
+  // 아래로 내려가는 화살표 자국
+  cx.fillStyle = 'rgba(255,201,77,.22)';
+  cx.beginPath();
+  cx.moveTo(midX - 9, FRONT_Y + 66); cx.lineTo(midX + 9, FRONT_Y + 66); cx.lineTo(midX, FRONT_Y + 78);
+  cx.closePath(); cx.fill();
+
+  // 뒤에서부터 그려야 앞 냥이 위에 얹힌다
+  for (let i = Math.min(queue.length, 6) - 1; i >= 0; i--) {
+    const cat = queue[i];
+    const y = FRONT_Y - i * GAP - off;
+    if (y < -80) continue;
+    const front = i === 0 && slide < 0.4;
+    // 맨 앞 냥은 숨을 쉰다. 가만히 서 있으면 그림 같아서 조금씩 부푼다.
+    const bob = front ? 1 + Math.sin(breath * 5) * 0.035 : 1;
+    const r = (front ? 32 : 32 - Math.min(12, i * 2.6)) * bob;
+    cx.globalAlpha = i === 0 ? 1 : Math.max(0.34, 1 - i * 0.11);
+    cx.save();
+    // 틀리면 앞 냥이 고개를 젓는다
+    if (front && refuse > 0) {
+      cx.translate(midX, y); cx.rotate(Math.sin(refuse * 34) * 0.16); cx.translate(-midX, -y);
+    }
+    drawCat(midX, y, r, cat, front);
+    cx.restore();
+    cx.globalAlpha = 1;
+  }
+
+  // 위쪽 끝은 서서히 흐려지게 덮는다. 딱 잘리면 줄이 거기서 끝난 것처럼
+  // 보이는데, 실제로는 끝없이 이어지는 줄이다.
+  const fade = cx.createLinearGradient(0, 0, 0, 96);
+  fade.addColorStop(0, BOARD_BG);
+  fade.addColorStop(1, 'rgba(28,21,38,0)');
+  cx.fillStyle = fade;
+  cx.fillRect(0, 0, W, 96);
+
+  // 츄르를 받고 폴짝 떠나는 냥들
+  for (const v of leaving) {
+    cx.save();
+    cx.globalAlpha = Math.max(0, Math.min(1, v.life * 1.3));
+    cx.translate(v.x, v.y); cx.rotate(v.rot);
+    drawCat(0, 0, 30, v.cat, false);
+    cx.restore();
+  }
+  cx.globalAlpha = 1;
+
+  // 건넨 자리에서 퍼지는 고리
+  for (const g of rings) {
+    const p = Math.max(0, 1 - g.life);
+    cx.globalAlpha = Math.max(0, Math.min(1, g.life)) * 0.7;
+    cx.strokeStyle = g.col;
+    cx.lineWidth = Math.max(1, 6 * Math.min(1, g.life));
+    cx.beginPath(); cx.arc(g.x, g.y, Math.max(0, g.r + p * 70), 0, 6.284); cx.stroke();
+  }
+  cx.globalAlpha = 1;
+
+  // 튄 츄르
+  for (const b of bits) {
+    cx.save(); cx.globalAlpha = Math.max(0, b.life);
+    cx.translate(b.x, b.y); cx.rotate(b.rot);
+    cx.fillStyle = b.col;
+    roundRect(cx, -4, -11, 8, 22, 4); cx.fill();
+    cx.restore();
+  }
+  cx.globalAlpha = 1;
+  cx.restore();
+
+  // 글자는 흔들림 밖에서
+  cx.textAlign = 'center';
+  for (const t of texts) {
+    cx.globalAlpha = Math.max(0, Math.min(1, t.life * 1.6));
+    cx.fillStyle = t.col;
+    const age = 1 - t.life;
+    const pop = age < 0.12 ? 1.5 - (age / 0.12) * 0.5 : 1;
+    cx.font = `900 ${Math.round(t.size * pop)}px "Pretendard",system-ui,sans-serif`;
+    cx.fillText(t.str, t.x, t.y);
+  }
+  cx.globalAlpha = 1;
+
+  // 연속 표시
+  if (combo >= 2) {
+    const m = comboMult();
+    cx.fillStyle = m >= 5 ? '#ff8fb0' : (m >= 3 ? '#ffd75e' : (m >= 2 ? '#ffb38a' : '#9fe8c0'));
+    cx.font = '900 19px "Pretendard",system-ui,sans-serif';
+    cx.fillText(combo + '연속', W / 2, 22);
+    if (m > 1) {
+      cx.font = `900 ${Math.round(14 + (m - 1) * 2.5)}px "Pretendard",system-ui,sans-serif`;
+      cx.fillText('×' + m, W / 2, 42);
+    }
+  }
+
+  // 탄 띠
+  if (banner) {
+    const p = banner.t / banner.life;
+    const a = p < 0.12 ? p / 0.12 : (p > 0.78 ? (1 - p) / 0.22 : 1);
+    cx.save();
+    cx.globalAlpha = Math.max(0, Math.min(1, a));
+    cx.fillStyle = 'rgba(14,9,20,.85)';
+    cx.fillRect(0, H * 0.26, W, 78);
+    cx.strokeStyle = banner.col; cx.lineWidth = 2;
+    cx.beginPath();
+    cx.moveTo(0, H * 0.26); cx.lineTo(W, H * 0.26);
+    cx.moveTo(0, H * 0.26 + 78); cx.lineTo(W, H * 0.26 + 78);
+    cx.stroke();
+    cx.fillStyle = banner.col;
+    cx.font = '900 27px "Pretendard",system-ui,sans-serif';
+    cx.fillText(banner.top, W / 2, H * 0.26 + 34);
+    cx.fillStyle = '#e6dcf0';
+    cx.font = '700 14px "Pretendard",system-ui,sans-serif';
+    cx.fillText(banner.bottom, W / 2, H * 0.26 + 58);
+    cx.restore();
+  }
+  cx.globalAlpha = 1;
+  cx.textAlign = 'start';
+}
+
+/* ---------------- 한 판 ---------------- */
+function step(dt) {
+  if (banner) { banner.t += dt; if (banner.t > banner.life) banner = null; }
+  for (const t of texts) { t.life -= dt * 1.1; t.y = Math.max(48, t.y + t.vy * dt); }
+  texts = texts.filter(t => t.life > 0);
+  for (const b of bits) {
+    b.life -= dt * 1.1; b.x += b.vx * dt; b.y += b.vy * dt; b.vy += 900 * dt; b.rot += b.vr * dt;
+  }
+  bits = bits.filter(b => b.life > 0);
+  for (const v of leaving) {
+    v.life -= dt * 1.15; v.x += v.vx * dt; v.y += v.vy * dt; v.vy += 1100 * dt; v.rot += v.vr * dt;
+  }
+  leaving = leaving.filter(v => v.life > 0 && v.y < H + 140);
+  for (const g of rings) g.life -= dt * 2.4;
+  rings = rings.filter(g => g.life > 0);
+  breath += dt;
+  if (refuse > 0) refuse = Math.max(0, refuse - dt * 4);
+  if (slide > 0) slide = Math.max(0, slide - dt * 7);
+  if (flash > 0) flash = Math.max(0, flash - dt * 2.2);
+  if (shakeT > 0) shakeT = Math.max(0, shakeT - dt * 3);
+  for (const c of queue) { c.hide += dt; if (c.wake > 0) c.wake = Math.max(0, c.wake - dt * 3); }
+
+  if (intro > 0) { intro -= dt; return; }        // 안내가 걷힐 때까진 시간이 안 간다
+  if (!playing || over) return;
+
+  timeLeft -= dt;
+  if (timeLeft <= 0) { timeLeft = 0; return gameOver(); }
+  const t = Math.ceil(timeLeft);
+  if ($('#time').textContent !== String(t)) $('#time').textContent = t;
+  $('#timeBox').classList.toggle('warn', timeLeft <= 5);
+}
+
+function tick(now) {
+  raf = requestAnimationFrame(tick);
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  step(dt);
+  draw();
+}
+
+function newGame() {
+  score = 0; combo = 0; bestCombo = 0;
+  served = 0; wrongs = 0; golds = 0; wrongsIn10 = 0; perfectRun = 0;
+  texts = []; bits = []; leaving = []; rings = []; flash = 0; shakeT = 0; slide = 0;
+  refuse = 0; banner = null;
+  over = false; playing = true;
+  queue = []; refill();
+  timeLeft = ROUND;
+  $('#startScreen').classList.add('hide');
+  $('#overScreen').classList.add('hide');
+  $('#timeBox').classList.remove('warn');
+  $('#time').textContent = ROUND;
+  resetChase();
+  refreshHud();
+  showBanner('시작!', '육십 초 동안 최대한 많이', '#ffc94d', 1.2);
+  intro = 1.2;                  // 안내가 걷힌 뒤에 시간이 간다
+  stageStart();
+}
+
+function gameOver() {
+  over = true; playing = false;
+  window.saveBest();
+  const total = served + wrongs;
+  const acc = total ? Math.round(served / total * 100) : 0;
+  $('#overTitle').textContent = score >= best && score > 0 ? '최고 기록! 🏆' : '육십 초 끝!';
+  $('#overText').innerHTML =
+    `<b>${score.toLocaleString('ko-KR')}점</b><br>` +
+    `<b>${served}마리</b>에게 배급했어요 · 정확도 ${acc}%<br>` +
+    `최고 연속 ${bestCombo} · 황금냥 ${golds}마리` +
+    (wrongs ? `<br>${wrongs}번 틀렸어요 🙀` : '<br>한 번도 안 틀렸어요! 🏆');
+  $('#overScreen').classList.remove('hide');
+  over_();
+}
+
+/* ---------------- 손가락 ---------------- */
+document.getElementById('pads').addEventListener('pointerdown', (e) => {
+  const b = e.target.closest('.pad');
+  if (!b) return;
+  e.preventDefault();
+  press(+b.dataset.c);
+});
+addEventListener('keydown', (e) => {
+  const map = { Digit1: 0, Digit2: 1, Digit3: 2, KeyA: 0, KeyS: 1, KeyD: 2 };
+  if (e.code in map) {
+    e.preventDefault();
+    const ci = map[e.code];
+    press(ci);
+    const el = document.querySelector('.pad[data-c="' + ci + '"]');
+    if (el) { el.classList.add('down'); setTimeout(() => el.classList.remove('down'), 90); }
+  }
+});
+$('#startBtn').onclick = newGame;
+$('#retryBtn').onclick = newGame;
+
+// 손가락 두 개로 칠 때 화면이 확대되는 걸 막는다. 색 버튼 둘을 번갈아
+// 치는 게임이라 두 손가락이 동시에 닿는 일이 잦다.
+for (const t of ['gesturestart', 'gesturechange', 'gestureend']) {
+  document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
+}
+document.addEventListener('touchmove', (e) => {
+  const overflows = document.documentElement.scrollHeight > window.innerHeight + 1;
+  if (!overflows && e.cancelable) e.preventDefault();
+}, { passive: false });
+
+/* ---------------- 소리 ---------------- */
+let _ac = null;
+function actx() {
+  if (!_ac) { try { _ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+  if (_ac.state === 'suspended') _ac.resume();
+  return _ac;
+}
+function tone(freq, dur, type, vol, slideTo) {
+  const ac = actx(); if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type || 'sine';
+  o.frequency.setValueAtTime(freq, ac.currentTime);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ac.currentTime + dur);
+  g.gain.setValueAtTime(vol || 0.14, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0008, ac.currentTime + dur);
+  o.connect(g); g.connect(ac.destination);
+  o.start(); o.stop(ac.currentTime + dur + 0.02);
+}
+// 색마다 음이 다르다. 세 색이 도·미·솔이라 이어 치면 노래처럼 들린다.
+const NOTE = [523, 659, 784];
+function chime(ci, step) { tone(NOTE[ci] * Math.pow(2, (step || 0) / 24), 0.12, 'triangle', 0.14); }
+function blip(f) { tone(f, 0.07, 'square', 0.06); }
+function ding() { [880, 1170, 1560].forEach((f, i) => setTimeout(() => tone(f, 0.15, 'sine', 0.12), i * 65)); }
+function wrong() { tone(200, 0.22, 'sawtooth', 0.14, 100); }
+function stageStart() { [520, 660, 780].forEach((f, i) => setTimeout(() => tone(f, 0.13, 'square', 0.08), i * 85)); }
+function fanfare() { [660, 830, 990, 1320].forEach((f, i) => setTimeout(() => tone(f, 0.19, 'triangle', 0.12), i * 90)); }
+function over_() { [520, 440, 350, 260].forEach((f, i) => setTimeout(() => tone(f, 0.21, 'triangle', 0.1), i * 125)); }
+addEventListener('pagehide', () => { try { _ac && _ac.close(); _ac = null; } catch (e) {} });
+
+/* ---------------- 지금 1등 ---------------- */
+var topRec = null, passedTop = false;
+try {
+  var _t = JSON.parse(localStorage.getItem('dmc_top_churu') || 'null');
+  // 내가 1등이어도 띄운다. 1등인 사람도 지킬 기록이 있어야 조마조마하다.
+  if (_t && _t.score > 0) topRec = _t;
+} catch (e) {}
+
+function bumpChase(cur) {
+  var el = document.getElementById('chase');
+  if (!el) return;
+  if (!topRec) { el.classList.add('hide'); return; }
+  el.classList.remove('hide');
+  if (!passedTop && cur > topRec.score) passedTop = true;
+  el.classList.toggle('won', passedTop);
+  if (passedTop) {
+    document.getElementById('chaseWho').textContent = '👑';
+    document.getElementById('chaseVal').textContent = topRec.mine ? '기록 갱신!' : '1등!';
+    document.getElementById('chaseFill').style.width = '100%';
+  } else {
+    document.getElementById('chaseWho').textContent = topRec.mine ? '👑 내 기록' : topRec.name;
+    document.getElementById('chaseVal').textContent = topRec.score.toLocaleString('ko-KR');
+    document.getElementById('chaseFill').style.width =
+      Math.min(100, cur / topRec.score * 100) + '%';
+  }
+}
+function resetChase() { passedTop = false; bumpChase(0); }
+bumpChase(0);
+
+layout();
+let layoutTimer = 0;
+addEventListener('resize', () => {
+  clearTimeout(layoutTimer);
+  layoutTimer = setTimeout(() => { layout(); draw(); }, 120);
+});
+draw();
+raf = requestAnimationFrame((t) => { lastT = t; tick(t); });
+</script>
+</body>
+</html>
