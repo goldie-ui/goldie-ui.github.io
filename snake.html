@@ -731,7 +731,9 @@ render();          // 매 프레임 다시 그린다 — 효과가 끊기지 않
 var topRec = null, passedTop = false;
 try {
   var _t = JSON.parse(localStorage.getItem('dmc_top_snake') || 'null');
-  if (_t && _t.score > 0 && !_t.mine) topRec = _t;
+  // 내가 1등이어도 띄운다. 예전엔 숨겼는데, 그러면 1등인 사람은 게임 내내
+  // 아무 목표도 없이 논다. 내 기록도 넘어야 할 벽이다.
+  if (_t && _t.score > 0) topRec = _t;
 } catch (e) {}
 
 function bumpChase(cur){
@@ -743,10 +745,10 @@ function bumpChase(cur){
   el.classList.toggle('won', passedTop);
   if (passedTop) {
     document.getElementById('chaseWho').textContent = '👑';
-    document.getElementById('chaseVal').textContent = '1등!';
+    document.getElementById('chaseVal').textContent = topRec.mine ? '기록 갱신!' : '1등!';
     document.getElementById('chaseFill').style.width = '100%';
   } else {
-    document.getElementById('chaseWho').textContent = topRec.name;
+    document.getElementById('chaseWho').textContent = topRec.mine ? '👑 내 기록' : topRec.name;
     document.getElementById('chaseVal').textContent = topRec.score.toLocaleString('ko-KR');
     document.getElementById('chaseFill').style.width =
       Math.min(100, cur / topRec.score * 100) + '%';

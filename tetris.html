@@ -353,7 +353,9 @@ try {
   const raw = localStorage.getItem('dmc_top_cattris');
   if (raw) {
     const o = JSON.parse(raw);
-    if (o && o.score > 0 && !o.mine) topRec = o;   // 내가 1등이면 쫓을 게 없다
+    // 내가 1등이어도 띄운다. 예전엔 숨겼는데, 그러면 1등인 사람은 한 판
+    // 내내 아무 목표도 없이 논다. 내 기록도 넘어야 할 벽이다.
+    if (o && o.score > 0) topRec = o;
   }
 } catch(e){}
 let edgeFlash = 0;     // 크게 터졌을 때 판 테두리가 번쩍이는 정도
@@ -385,12 +387,12 @@ function showChase(){
   box.classList.toggle('won', passedTop);
   if(passedTop){
     $('#chaseWho').textContent = '지금';
-    $('#chaseVal').textContent = '👑 1등';
+    $('#chaseVal').textContent = topRec.mine ? '👑 갱신!' : '👑 1등';
   } else {
     // 1등 점수를 그대로 못박아 둔다. 남은 점수를 세면 숫자가 계속 줄어서
     // 쫓기는 기분이 드는데, 목표를 걸어 두고 거기까지 올라가는 편이 낫다.
     // 얼마나 왔는지는 판 위 막대가 보여 준다.
-    $('#chaseWho').textContent = topRec.name;      // '까지'까지 넣으면 옆 칸에서 두 줄로 접힌다
+    $('#chaseWho').textContent = topRec.mine ? '내 기록' : topRec.name;   // '까지'까지 넣으면 두 줄로 접힌다
     $('#chaseVal').textContent = topRec.score.toLocaleString('ko-KR');
   }
 }
@@ -399,7 +401,8 @@ function showChase(){
 function checkPassedTop(){
   if(topRec && !passedTop && score > topRec.score){
     passedTop = true;
-    texts.push({x:bc.width/2, y:bc.height*0.30, str:`${topRec.name} 넘었다!! 🏆`,
+    texts.push({x:bc.width/2, y:bc.height*0.30,
+                str: topRec.mine ? '내 기록 넘었다!! 🏆' : `${topRec.name} 넘었다!! 🏆`,
                 life:1, vy:-0.5, color:'#ffd85b', size:30});
     edgeFlash = 1; addShake(24); crownFx = 1; fanfare();
     for(let i=0;i<40;i++){
