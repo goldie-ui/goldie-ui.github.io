@@ -472,7 +472,12 @@ function move(dir){
     if(t.val > topVal) topVal = t.val;
     if(t.val >= 128 && !reached.has(t.val)){ reached.add(t.val); milestone += t.val*2; }
   }
-  const total = gained + chain + comboB + milestone;
+  // 여기 곱하는 2.5 는 여섯 게임에 똑같이 얹은 값이다.
+  //
+  // 이 게임 점수는 거의 다 gained — 합친 칸 값의 합이다. 콤보 덤이나
+  // 이정표를 아무리 손봐도 총점에서 차지하는 몫이 작아서 표가 안 났다.
+  // 그래서 총합에 건다. 모두에게 같은 비율이라 순위는 그대로다.
+  const total = Math.round((gained + chain + comboB + milestone) * 2.5);
   score += total;
   document.getElementById('score').textContent = score;
   bumpChase(score);

@@ -219,13 +219,14 @@ let combo = 0, comboT = 0;
 const GRAZE = 26;
 let grazes = 0;
 
-// 멀리 갈수록 츄르가 값어치 있어진다. 6000마다 반 배씩, 세 배까지.
-/* 멀리 갈수록 먹을 게 값어치가 오른다.
-   ×3 에서 멈춰 뒀는데, 거리 12,000 이면 점수로 460 점쯤이라 판 초반에
-   벌써 천장에 닿았다. 그 뒤로는 아무리 멀리 가도 한 입 값이 그대로다 —
-   캣트리스·스네이크·줄서냥·냥냥펀치에서 겪은 것과 같은 구멍이다.
-   ×10 까지 열어 둔다. 거기 닿으려면 108,000 을 가야 한다. */
-const treatMult = () => Math.min(10, 1 + Math.floor(dist / 6000) * 0.5);
+/* 멀리 갈수록 먹을 게 값어치가 오른다. 6000 마다 ×1.25 씩, ×25 까지.
+
+   바닥을 1 이 아니라 2.5 로 깔았다. 1 에서 시작하니 6000 도 못 가는
+   사람은 배수를 구경도 못 했다 — 캣트리스·스네이크·줄서냥·냥냥펀치에서
+   똑같이 겪은 구멍이다. 아래 거리 점수(26 → 10 으로 나눈다)와 장애물
+   덤도 같은 비율로 올려 뒀다. 배수가 닿는 몫만 올리면 배수를 안 타는
+   거리 점수가 총점을 눌러 앉혀서, 잘하는 사람만 오르고 만다. */
+const treatMult = () => Math.min(25, 2.5 + Math.floor(dist / 6000) * 1.25);
 let shield = 0, nipT = 0, magT = 0, graceT = 0;   // 보호막·캣닢·자석·무적시간
 let stage = 1, stageT = 0;
 let running = false, dead = 0, shake = 0;
@@ -643,7 +644,7 @@ function step() {
     combo++; comboT = tick;
     // 여섯 개를 이어 먹으면 덤을 준다. 줄을 끝까지 따라갈 이유가 생긴다.
     if (combo % 6 === 0) {
-      bonus += 25;
+      bonus += 62;
       pops.push({ x: CAT_X + 34, y: cat.y - 26, t: 0, txt: '연속 ' + combo + '! +25', kind: 'gold' });
       sfxCombo();
     }
@@ -699,7 +700,7 @@ function step() {
     if (pops[i].t > 42) pops.splice(i, 1);
   }
 
-  const n = Math.floor(dist / 26) + bonus;
+  const n = Math.floor(dist / 10) + bonus;
   if (n !== score) { score = n; $('#score').textContent = score; bumpChase(score); }
 
   for (const o of haz) {
@@ -707,7 +708,7 @@ function step() {
     if (o.gone || !hitHaz(o)) continue;
     if (nipT > 0) {
       // 캣닢 먹은 동안은 부딪히는 게 오히려 점수다.
-      o.gone = 1; bonus += 10; shake = 6;
+      o.gone = 1; bonus += 25; shake = 6;
       pops.push({ x: o.x, y: cat.y, t: 0, txt: '+10', kind: 'nip' });
       sfxSmash();
       continue;

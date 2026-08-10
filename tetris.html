@@ -464,10 +464,24 @@ const MULT_CAP = 20;
 // 11구간이면 ×13.4 로 첫 걸음부터 예전을 앞선다. ×20 에는 16구간
 // (335줄)에서 닿는다.
 const LAST_STAGE = STAGES[STAGES.length - 1].n;
+
+// 구간 배수에 통째로 얹는 값.
+//
+// 여태 배수가 곧 구간 번호였다. 1구간이 ×1 이라, 열 줄도 못 지우고
+// 끝나는 사람에게는 배수라는 게 아예 없는 것이나 마찬가지였다.
+// 뚜껑을 열고 후반을 손본 것도 8구간(110줄) 위의 이야기라 초보와는
+// 상관이 없었다. 줄서냥·스네이크·츄르런에서 똑같이 나온 구멍이다.
+//
+// 여기 곱하는 값은 모든 구간에 똑같이 걸리니, 열 줄 지운 사람이나
+// 삼백 줄 지운 사람이나 오르는 비율이 같다. 순위는 그대로 두고
+// 숫자만 키우는 자리다.
+const LIFT = 2.5;
 function scoreMult(){
   const n = stage.n;
-  if(n <= LAST_STAGE) return n;
-  return Math.min(MULT_CAP, Math.round((LAST_STAGE + (n - LAST_STAGE) * 1.6) * 10) / 10);
+  const raw = n <= LAST_STAGE
+    ? n
+    : Math.min(MULT_CAP, LAST_STAGE + (n - LAST_STAGE) * 1.6);
+  return Math.round(raw * LIFT * 10) / 10;
 }
 function stageFor(ln){
   let s = STAGES[0];
