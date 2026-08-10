@@ -74,24 +74,24 @@
   .overlay button{background:linear-gradient(120deg,var(--accent),var(--accent2)); color:#fff;
     border:none; border-radius:12px; padding:13px 30px; font-weight:700; font-size:16px; cursor:pointer}
   .hint{color:var(--muted); font-size:13px; margin-top:18px; text-align:center}
-  /* mobile dpad */
-  /* 조이스틱 — 방향만 정하면 되는 게임이라 버튼 넉 개보다 이게 낫다.
-     엄지를 한 자리에 두고 밀기만 하면 되니 손이 안 헤맨다. */
-  .stickWrap{display:none; justify-content:center; margin-top:14px; touch-action:none}
-  .stick{position:relative; width:150px; height:150px; border-radius:50%;
-    background:radial-gradient(circle at 50% 45%, #242742 0%, var(--board) 70%);
-    border:1px solid var(--line); display:grid; place-items:center;
-    user-select:none; -webkit-user-select:none; touch-action:none}
-  .stick .tick{position:absolute; font-style:normal; font-size:13px; color:var(--muted); opacity:.75}
-  .stick .tick.u{top:9px} .stick .tick.d{bottom:9px}
-  .stick .tick.l{left:10px} .stick .tick.r{right:10px}
-  .knob{width:62px; height:62px; border-radius:50%;
-    background:linear-gradient(160deg,#8f7bff,#c86bd8); box-shadow:0 6px 16px rgba(0,0,0,.4);
-    transition:transform .12s ease}
-  .knob.dragging{transition:none}
-  .stick.on{border-color:var(--accent)}
-  @media (hover:none) and (pointer:coarse){ .stickWrap{display:flex} }
-  @media (max-width:640px){ .stickWrap{display:flex} }
+  /* 방향키 — 노트북 자판의 방향키와 같은 뒤집힌 T 자로 놓는다.
+     조이스틱을 쓰다가 바꿨다. 미는 게임이 아니라 넷 중 하나를 고르는
+     게임이라, 누를 자리가 눈에 보이는 편이 손이 덜 헤맨다. 스틱은
+     45° 언저리에서 축이 뒤집히는 걸 막느라 문턱을 두 개나 둬야 했는데,
+     버튼은 누른 게 곧 방향이라 그럴 일이 없다.
+
+     진짜 button 이라 누르면 초점이 게임 안으로 들어온다. 그래서 한 번
+     누른 뒤로는 노트북 자판의 방향키도 같이 먹는다. */
+  .keys{display:none; flex-direction:column; align-items:center; gap:8px;
+    margin-top:14px; touch-action:manipulation}
+  .krow{display:flex; gap:8px}
+  .keys button{width:66px; height:56px; background:var(--board); color:var(--text);
+    border:1px solid var(--line); border-radius:12px; line-height:1;
+    font-size:20px; font-weight:700; cursor:pointer;
+    user-select:none; -webkit-user-select:none; touch-action:manipulation}
+  .keys button:active{background:var(--accent); border-color:var(--accent); color:#fff}
+  @media (hover:none) and (pointer:coarse){ .keys{display:flex} }
+  @media (max-width:640px){ .keys{display:flex} }
 
   /* 폰에서는 스크롤 없이 한 화면에. 앱 안에서는 위 막대만큼 더 좁아지니
      남는 높이에 맞춰 판을 줄인다. */
@@ -111,15 +111,14 @@
     canvas{width:auto; height:auto; aspect-ratio:1/1;
            max-width:100%; max-height:100%; margin:0}
     .hint{display:none}
-    .stickWrap{flex:none; margin-top:2px}
-    .stick{width:132px; height:132px}
-    .knob{width:56px; height:56px}
+    .keys{flex:none; margin-top:2px; gap:6px}
+    .krow{gap:6px}
+    .keys button{width:62px; height:50px; font-size:19px}
   }
   /* 더 낮은 화면에서는 조이스틱과 머리글을 한 번 더 줄인다 */
   @media (max-width:640px) and (max-height:700px){
     .top h1{font-size:16px}
-    .stick{width:112px; height:112px}
-    .knob{width:48px; height:48px}
+    .keys button{width:58px; height:43px; font-size:17px}
   }
 
   /* 지금 1등을 쫓는 띠.
@@ -182,10 +181,12 @@
   </div>
 </div>
 <p class="hint">화살표 · WASD · 스와이프로 조작 &nbsp;·&nbsp; Space 일시정지</p>
-<div class="stickWrap" id="stickWrap">
-  <div class="stick" id="stick">
-    <i class="tick u">▲</i><i class="tick d">▼</i><i class="tick l">◀</i><i class="tick r">▶</i>
-    <div class="knob" id="knob"></div>
+<div class="keys" id="keys">
+  <div class="krow"><button type="button" data-d="u" aria-label="위">▲</button></div>
+  <div class="krow">
+    <button type="button" data-d="l" aria-label="왼쪽">◀</button>
+    <button type="button" data-d="d" aria-label="아래">▼</button>
+    <button type="button" data-d="r" aria-label="오른쪽">▶</button>
   </div>
 </div>
 
@@ -671,78 +672,25 @@ $('#speedSel').addEventListener('click', e=>{
   if(alive && !paused){ clearInterval(timer); timer = setInterval(loop, speed); }
 });
 
-// 조이스틱
-// 엄지를 얹고 미는 방향으로 간다. 손을 떼면 손잡이가 가운데로 돌아온다.
-// 뗄 때 방향을 되돌리지는 않는다 — 뱀은 계속 그 방향으로 가야 한다.
+// 방향키 버튼
+// 누른 게 곧 방향이다. 스틱처럼 미는 거리를 재지 않으니 문턱도 없다.
+//
+// pointerdown 에서 잡는다 — click 까지 기다리면 손을 뗄 때까지 늦는다.
+// preventDefault 는 부르지 않는다. 그걸 부르면 초점이 게임으로 안 넘어와서
+// 자판 방향키가 죽는다(스틱이 그랬다). 겹눌러도 두 번 세는 일이 없게
+// 그 손가락 하나만 본다.
 (function(){
-  const stick = document.getElementById('stick');
-  const knob  = document.getElementById('knob');
-  if(!stick) return;
-
-  const DEAD = 14;    // 이만큼은 밀어야 방향으로 친다. 손 떨림 무시
-  const MAX  = 44;    // 손잡이가 나갈 수 있는 거리
-  let id = null;
-
-  const place = (dx, dy)=>{
-    const d = Math.hypot(dx, dy);
-    const k = d > MAX ? MAX / d : 1;
-    knob.style.transform = `translate(${dx*k}px, ${dy*k}px)`;
-  };
-  const home = ()=>{ knob.style.transform = ''; };
-
-  // 가로세로 중 더 많이 민 쪽으로 간다. 다만 그냥 견주기만 하면
-  // 45° 언저리에서 손이 2px 만 떨려도 가로세로가 번갈아 뒤집힌다.
-  // 재 보니 엄지를 정각 45° 에 얹었을 때 일 초에 서른 번 뒤집혔다.
-  //
-  // 그래서 지금 가는 축을 버리려면 다른 축이 1.6 배는 커야 하고,
-  // 축을 아예 바꾸려면 24px 은 밀어야 한다. 살짝 얹어 둔 채로는
-  // 축이 안 바뀐다. 꺾는 건 81ms 안에 들어와 한 칸(95ms) 안이다.
-  const SWAP = 1.6;
-  const TURN = 24;
-  let last = null;
-  const aim = (dx, dy)=>{
-    const r = Math.hypot(dx, dy);
-    if(r < DEAD) return;
-    const ax = Math.abs(dx), ay = Math.abs(dy);
-    let horiz;
-    if(last == null){
-      horiz = ax > ay;
-    } else {
-      const wasH = last === 'l' || last === 'r';
-      horiz = wasH ? ax * SWAP > ay : ax > ay * SWAP;
-      if(r < TURN) horiz = wasH;          // 살짝 민 채로는 축을 안 바꾼다
-    }
-    last = horiz ? (dx > 0 ? 'r' : 'l') : (dy > 0 ? 'd' : 'u');
-    setDir(last);
-  };
-
-  stick.addEventListener('pointerdown', e=>{
-    e.preventDefault();
-    id = e.pointerId;
-    try{ stick.setPointerCapture(id); }catch{}
-    stick.classList.add('on');
-    knob.classList.add('dragging');
-    const r = stick.getBoundingClientRect();
-    const dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2);
-    place(dx, dy); aim(dx, dy);
+  const box = document.getElementById('keys');
+  if(!box) return;
+  const held = new Set();
+  box.addEventListener('pointerdown', e=>{
+    const b = e.target.closest('button[data-d]');
+    if(!b || held.has(e.pointerId)) return;
+    held.add(e.pointerId);
+    setDir(b.dataset.d);
   });
-
-  stick.addEventListener('pointermove', e=>{
-    if(e.pointerId !== id) return;
-    const r = stick.getBoundingClientRect();
-    const dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2);
-    place(dx, dy); aim(dx, dy);
-  });
-
-  const release = e=>{
-    if(e.pointerId !== id) return;
-    id = null;
-    last = null;                          // 다시 얹을 땐 처음부터 본다
-    stick.classList.remove('on');
-    knob.classList.remove('dragging');
-    home();
-  };
-  ['pointerup','pointercancel','pointerleave'].forEach(ev=>stick.addEventListener(ev, release));
+  const drop = e => held.delete(e.pointerId);
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>box.addEventListener(ev, drop));
 })();
 
 // swipe
