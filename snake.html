@@ -85,9 +85,11 @@
   .keys{display:none; flex-direction:column; align-items:center; gap:11px;
     margin-top:14px; touch-action:manipulation}
   .krow{display:flex; gap:11px}
-  .keys button{width:96px; height:80px; background:var(--board); color:var(--text);
+  /* 크기는 아래 fitKeys() 가 재서 넣는다. 여기 적은 건 그 전까지 쓸 값. */
+  .keys button{width:var(--kw, 96px); height:var(--kh, 80px);
+    background:var(--board); color:var(--text);
     border:1px solid var(--line); border-radius:16px; line-height:1;
-    font-size:27px; font-weight:700; cursor:pointer;
+    font-size:calc(var(--kh, 80px) * .34); font-weight:700; cursor:pointer;
     user-select:none; -webkit-user-select:none; touch-action:manipulation}
   .keys button:active{background:var(--accent); border-color:var(--accent); color:#fff}
   @media (hover:none) and (pointer:coarse){ .keys{display:flex} }
@@ -111,23 +113,13 @@
     canvas{width:auto; height:auto; aspect-ratio:1/1;
            max-width:100%; max-height:100%; margin:0}
     .hint{display:none}
-    /* 판은 가로에 막혀 있어서(폭 - 여백) 세로가 남아돈다. 812 높이에서
-       재 보니 판 둘레에 177px 이 놀고 있었다. 그 몫을 버튼에 준다.
-       이제는 세로가 아니라 가로가 한계다 — 세 개에 간격 둘이 324px 이라
-       360px 폭 폰(쓸 수 있는 폭 336)까지 들어간다. 104 로 키우면 338 이
-       되어 거기서 넘친다. */
     .keys{flex:none; margin-top:2px; gap:12px}
     .krow{gap:12px}
-    .keys button{width:100px; height:84px; font-size:28px}
   }
   /* 더 낮은 화면에서는 조이스틱과 머리글을 한 번 더 줄인다 */
   @media (max-width:640px) and (max-height:700px){
     .top h1{font-size:16px}
-    /* 낮은 화면(667)에서는 버튼을 키우면 판이 조금 줄어든다. 74×60 이
-       판을 안 건드리는 최대였지만 손에 작았다. 84×70 이면 판이 351 에서
-       339 로, 3% 남짓 준다 — 눈에 안 띄는 만큼만 내주고 버튼을 키운다. */
     .keys{gap:10px} .krow{gap:10px}
-    .keys button{width:84px; height:70px; font-size:24px}
   }
 
   /* 지금 1등을 쫓는 띠.
@@ -681,6 +673,35 @@ $('#speedSel').addEventListener('click', e=>{
   if(alive && !paused){ clearInterval(timer); timer = setInterval(loop, speed); }
 });
 
+// 방향키 크기 맞추기.
+//
+// 판은 정사각형이라 가로(폭에서 여백을 뺀 값)에 막힌다. 그 위로 세로가
+// 남아도 판은 더 못 커지니, 남는 세로는 버튼이 가져도 된다. 거꾸로 세로가
+// 모자라면 버튼이 먼저 줄어야 한다 — 판을 깎으면 안 된다.
+//
+// px 로 못박아 뒀다가 앱 안에서 판을 깎아먹었다. 앱은 위에 머리띠가 있어
+// 게임에 남는 높이가 폰 화면보다 50~90px 짧은데, 나는 게임만 통째로 띄운
+// 화면에서 크기를 골랐다. 재 보니 게임 높이 640 에서 판이 351 에서 282 로
+// 줄어 있었다. 못박지 말고 그때그때 재서 준다.
+const KEY_MAX_W = 100, KEY_MAX_H = 84, KEY_MIN_H = 38;
+function fitKeys(){
+  const keys = document.getElementById('keys');
+  const wrap = document.querySelector('.board-wrap');
+  if(!keys || !wrap) return;
+  if(getComputedStyle(keys).display === 'none') return;
+  const gap = parseFloat(getComputedStyle(keys).rowGap) || 10;
+  // 판과 방향키가 나눠 쓰는 세로. 어느 쪽이 커지든 이 합은 그대로다.
+  const pool = wrap.getBoundingClientRect().height + keys.getBoundingClientRect().height;
+  const side = wrap.clientWidth;                 // 판이 가로에 막히는 값
+  const left = Math.max(0, pool - side);         // 판을 다 주고 남는 세로
+  const h = Math.max(KEY_MIN_H, Math.min(KEY_MAX_H, (left - gap) / 2));
+  const w = Math.min(KEY_MAX_W, (side - gap * 2) / 3);
+  keys.style.setProperty('--kw', Math.floor(w) + 'px');
+  keys.style.setProperty('--kh', Math.floor(h) + 'px');
+}
+addEventListener('resize', fitKeys);
+addEventListener('orientationchange', () => setTimeout(fitKeys, 120));
+
 // 방향키 버튼
 // 누른 게 곧 방향이다. 스틱처럼 미는 거리를 재지 않으니 문턱도 없다.
 //
@@ -714,6 +735,7 @@ cv.addEventListener('touchend', e=>{
 }, {passive:true});
 
 initGame();
+fitKeys();
 render();          // 매 프레임 다시 그린다 — 효과가 끊기지 않게
 
 /* ---------------- 지금 1등 ----------------
