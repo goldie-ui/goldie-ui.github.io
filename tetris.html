@@ -1361,8 +1361,25 @@ function startGame(){
   bgmStart();
   if(!raf) raf = requestAnimationFrame(tick);
 }
+/* 죽은 뒤 잠깐은 아무 입력으로도 새 판이 시작되지 않게 한다.
+
+   ▼ 나 ◀ 를 꾹 누른 채 죽으면 55ms 뒤 자동 반복이 한 번 더 돌았고,
+   그 안에서 doAct 가 '아직 시작 안 했거나 끝났으면 startGame' 을 타면서
+   게임 오버 화면이 뜨자마자 새 판이 시작됐다. 판 위를 톡 친 경우도 같다.
+   눈에는 '갑자기 저절로 새 게임이 시작' 되는 것으로 보인다.
+
+   눌러 둔 버튼의 반복을 먼저 끊고, 그 뒤 0.8초 동안은 암묵적인 입력
+   (버튼·판 탭·스페이스)으로 못 시작하게 막는다. 화면의 '다시 하기' 를
+   직접 누르는 건 뜻이 분명하니 그대로 둔다. */
+const RESTART_LOCK = 800;
+let overAt = 0;
+const holdStops = [];                 // 눌러 둔 버튼들의 반복을 끊는 함수들
+const canRestart = () => Date.now() - overAt > RESTART_LOCK;
+
 function gameOver(){
   over=true;
+  overAt = Date.now();
+  for(const stop of holdStops) stop();   // 누르고 있던 버튼부터 놓게 한다
   window.saveBest();
   awaitingStage=false; pendingStage=null;
   addShake(10);
@@ -1589,7 +1606,10 @@ window.addEventListener('keydown', e=>{
   // 위치라 한글이든 영문이든 늘 'KeyC' 다.
   const k = e.code;
   if(k==='KeyP'){ togglePause(); return; }
-  if(!started||over){ if(e.code==='Space'||e.key==='Enter'){ e.preventDefault(); startGame(); } return; }
+  if(!started||over){
+    if(e.code==='Space'||e.key==='Enter'){ e.preventDefault(); if(canRestart()) startGame(); }
+    return;
+  }
   if(paused) return;
   if(k==='ArrowLeft'  || k==='KeyA') move(-1);
   else if(k==='ArrowRight' || k==='KeyD') move(1);
@@ -1622,7 +1642,7 @@ const HOLD_RATE  = 55;    // 반복 간격
 
 function doAct(a){
   if(awaitingStage){ enterNextStage(); return false; }
-  if(!started||over){ startGame(); return false; }
+  if(!started||over){ if(canRestart()) startGame(); return false; }
   if(paused) return false;
   if(a==='left') move(-1);
   else if(a==='right') move(1);
@@ -1640,6 +1660,7 @@ document.querySelectorAll('.touch button').forEach(b=>{
   let delay=null, timer=null;
 
   const stop = ()=>{ clearTimeout(delay); clearInterval(timer); delay=timer=null; };
+  holdStops.push(stop);         // 죽을 때 여기서 한꺼번에 끊는다
 
   b.addEventListener('pointerdown', e=>{
     e.preventDefault();
@@ -1697,7 +1718,7 @@ bc.addEventListener('touchend', e=>{
   const adx=Math.abs(dx), ady=Math.abs(dy), dt=Date.now()-st;
 
   if(awaitingStage){ enterNextStage(); sx=null; return; }
-  if(!started||over){ startGame(); sx=null; return; }
+  if(!started||over){ if(canRestart()) startGame(); sx=null; return; }
   if(paused){ sx=null; return; }
 
   if(adx<14 && ady<14 && dt<300){ rotate(1); }             // 톡 치면 회전
