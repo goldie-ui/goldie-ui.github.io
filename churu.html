@@ -191,7 +191,8 @@
 
 <p class="hint">
   <b>🌟 황금냥</b> 아무 색이나 · <b>😴 잠꾸러기</b> 두 번 · <b>🙈 가면냥</b> 색을 가려요<br>
-  <b>10마리 무실수</b>면 시간 +1.5초 · 틀리면 <b>시간이 깎이고</b> 연속이 끊겨요
+  <b>10마리 무실수</b>면 시간 +1.5초 · 많이 먹일수록 <b>한 마리 값이 커져요</b><br>
+  틀리면 <b>시간이 깎이고</b> 연속이 끊겨요
 </p>
 
 <script>
@@ -264,6 +265,16 @@ function comboMult() {
 }
 
 const BASE = 20;              // 한 마리 기본 점수
+
+/* ---------------- 줄 배수 ----------------
+   먹일수록 까다로운 냥이 늘어나는데(잠꾸러기·가면냥) 한 마리 값은 20점
+   그대로였다. 어려워지기만 하고 값은 안 오른 셈이다 — 캣트리스에서
+   똑같은 걸 겪고 고쳤다.
+
+   이제 열다섯 마리마다 배수가 0.25 씩 오른다. 서른 마리에 ×1.5,
+   백 마리에 ×2.5, 이백 마리에 ×4.25. 뒤로 갈수록 한 마리가 무거워져서,
+   오래 이어 간 판이 그만큼 값을 받는다. */
+const servedMult = () => 1 + Math.floor(served / 15) * 0.25;
 // 틀리면 깎이는 시간.
 //
 // 1.2초로 뒀더니 서툰 사람은 판이 49초로 줄어서, 점수를 덜 받는 데다
@@ -371,10 +382,10 @@ function press(ci) {
   //
   // 연속 배수를 곱한 값이 곧 이 한 마리의 값이다. 스무 점짜리가 여덟 배면
   // 백육십 점이니, 이어 가는 것 자체가 이 게임에서 가장 큰 점수원이다.
-  const m = comboMult();
-  let gain = Math.round(BASE * m);
+  const m = comboMult(), sm = servedMult();
+  let gain = Math.round(BASE * m * sm);
   if (head.kind === 'gold') { gain = Math.round(gain * 1.5); golds++; }
-  const comboAdd = gain - BASE;      // 연속 덕분에 더 받은 몫
+  const comboAdd = gain - Math.round(BASE * sm);   // 연속 덕분에 더 받은 몫
   score += gain;
   served++;
   combo++;
@@ -409,7 +420,10 @@ function press(ci) {
   if (served % 10 === 0) {
     const clean = wrongsIn10 === 0;
     if (clean) perfectRun++; else perfectRun = 0;
-    const bonus = 100 + (clean ? Math.round(150 * Math.min(2.5, 1 + 0.25 * (perfectRun - 1))) : 0);
+    // 열 마리 보너스에도 줄 배수를 곱한다. 안 그러면 뒤로 갈수록
+    // 이것만 상대적으로 초라해진다.
+    const bonus = Math.round(
+      (100 + (clean ? Math.round(150 * Math.min(2.5, 1 + 0.25 * (perfectRun - 1))) : 0)) * servedMult());
     score += bonus;
     if (clean) {
       timeLeft = Math.min(MAX_TIME, timeLeft + CLEAN_TIME);

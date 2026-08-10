@@ -220,7 +220,12 @@ const GRAZE = 26;
 let grazes = 0;
 
 // 멀리 갈수록 츄르가 값어치 있어진다. 6000마다 반 배씩, 세 배까지.
-const treatMult = () => Math.min(3, 1 + Math.floor(dist / 6000) * 0.5);
+/* 멀리 갈수록 먹을 게 값어치가 오른다.
+   ×3 에서 멈춰 뒀는데, 거리 12,000 이면 점수로 460 점쯤이라 판 초반에
+   벌써 천장에 닿았다. 그 뒤로는 아무리 멀리 가도 한 입 값이 그대로다 —
+   캣트리스·스네이크·줄서냥·냥냥펀치에서 겪은 것과 같은 구멍이다.
+   ×10 까지 열어 둔다. 거기 닿으려면 108,000 을 가야 한다. */
+const treatMult = () => Math.min(10, 1 + Math.floor(dist / 6000) * 0.5);
 let shield = 0, nipT = 0, magT = 0, graceT = 0;   // 보호막·캣닢·자석·무적시간
 let stage = 1, stageT = 0;
 let running = false, dead = 0, shake = 0;
@@ -666,8 +671,11 @@ function step() {
     o.grazed = 1;                       // 완전히 지나갔다
     if (o.near === undefined || o.near > GRAZE) continue;
     if (nipT > 0) continue;             // 무적으로 뚫고 간 건 안 쳐 준다
+    // 아슬아슬 보너스에도 거리 배수를 곱한다. 가시를 스칠 듯 지나가는 게
+    // 이 게임에서 제일 어려운 짓인데, 여태 10·20점 고정이라 멀리 갈수록
+    // 상대적으로 초라해졌다.
     const tight = o.near < GRAZE * 0.45;
-    const val = tight ? 20 : 10;
+    const val = Math.round((tight ? 20 : 10) * treatMult());
     bonus += val;
     grazes++;
     pops.push({ x: CAT_X + 26, y: cat.y + (tight ? -30 : -22), t: 0,

@@ -459,8 +459,14 @@ function move(dir){
   // 콤보는 '연쇄를 이어서 낸 횟수'다. 그냥 합치기만 세면 2048 은 거의
   // 매 수마다 합쳐져서 콤보가 끝없이 쌓인다. 그러면 잘 둔 사람이 아니라
   // 오래 둔 사람이 이기는, 시간 재기가 되어 버린다.
+  //
+  // 덤은 판이 커질수록 같이 커져야 한다. 40 × 콤보로 못 박아 두면 후반에
+  // 512 를 합칠 때는 있으나 마나가 된다. 그래서 그때 터뜨린 값에 비례하게
+  // 바꿨다 — 여덟 번 상한은 그대로 두되, 한 칸의 무게가 판을 따라간다.
   combo = n >= 2 ? combo+1 : -1;
-  const comboB = combo > 0 ? 40 * Math.min(combo, 8) : 0;
+  const comboB = combo > 0
+    ? Math.round(Math.max(40, gained * 0.15) * Math.min(combo, 8))
+    : 0;
   let milestone = 0, topVal = 0;
   for(const t of mergedAll){
     if(t.val > topVal) topVal = t.val;

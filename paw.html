@@ -269,6 +269,15 @@ function stageAt(i) {
 
 const FAST_WINDOW = 0.35;         // 이 안에 때리면 '칼같이'
 
+/* ---------------- 탄 배수 ----------------
+   탄이 오를수록 머무는 시간이 짧아지고 한꺼번에 넷까지 나오는데, 한 마리
+   값은 10점 그대로였다. 어려워지기만 하고 값은 안 오른 셈이다 — 캣트리스,
+   스네이크, 줄서냥에서 똑같은 걸 겪고 고쳤다.
+
+   이제 탄마다 0.25 씩 오른다. 5탄에 ×2, 9탄에 ×3, 13탄에 ×4.
+   뒤 탄까지 간 판이 그만큼 값을 받는다. */
+const stageMult = () => 1 + (stage.n - 1) * 0.25;
+
 let score = 0, best = 0, combo = 0, bestCombo = 0;
 let hits = 0, misses = 0, oops = 0, golds = 0;
 let playing = false, over = false, raf = null, lastT = 0;
@@ -421,8 +430,8 @@ function whack(px, py) {
 
   // 나오자마자 때리면 두 배. 늦게 때려도 잡히기는 하지만 값이 다르다.
   const fast = o.t <= FAST_WINDOW;
-  const mult = comboMult();
-  let gain = Math.round(K.score * (fast ? 2 : 1) * mult);
+  const mult = comboMult(), sm = stageMult();
+  let gain = Math.round(K.score * (fast ? 2 : 1) * mult * sm);
 
   if (o.kind === 'chur') {
     stageTime = Math.min(STAGE_TIME * 1.5, stageTime + 1.5);
@@ -836,6 +845,12 @@ function showBanner(top, bottom, col, life) {
 function beginStage(i) {
   stageIdx = i;
   stage = stageAt(i);
+  // 한 마리 값이 탄마다 커지니 목표도 같은 배수로 키운다.
+  //
+  // 안 하면 뒤 탄이 오히려 쉬워진다. 실제로 배수만 넣고 재 봤더니 보통
+  // 실력이 7탄에서 14탄까지 갔다 — 어려워야 할 뒤가 헐거워진 것이다.
+  // 둘을 같이 올리면 겨루는 난이도는 그대로고 화면에 찍히는 점수만 커진다.
+  stage = { ...stage, goal: Math.round(stage.goal * stageMult()) };
   stageTime = STAGE_TIME;
   stageScore = 0;
   stageMiss = 0; stageOops = 0; goalAt = -1;
@@ -868,6 +883,7 @@ function passStage() {
   // 통과 보너스. 한 번도 안 놓치고 안 헛쳤으면 크게 얹는다.
   // 무실수가 이어질수록 더 커진다 — 여기가 잘하는 사람이 벌어지는 자리다.
   const perfect = stageMiss === 0 && stageOops === 0;
+  // 통과 보너스는 목표 점수에 비례하니 이미 탄이 오를수록 커진다.
   let bonus = Math.round(stage.goal * 0.3) + timeBonus;
   if (perfect) {
     perfectRun++;
