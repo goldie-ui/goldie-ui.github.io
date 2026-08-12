@@ -674,7 +674,10 @@ function clearLines(){
     // 줄은 못 지웠어도 T-스핀 자체는 값을 쳐 준다. 자리를 만들어 두는
     // 한 수라 여기서 안 주면 아무도 준비를 안 한다. 콤보는 끊긴다.
     if(lastSpin){
-      const gain = (lastSpin==='full' ? 400 : 100) * scoreMult();
+      // 배수가 2.5 · 7.5 처럼 소수라 반올림해서 맺는다. 안 그러면
+      // 점수에 소수점이 붙고, 순위표의 submit_score 가 integer 만 받아서
+      // 통째로 거절당한다 — 화면엔 점수가 오르는데 순위엔 안 올라간다.
+      const gain = Math.round((lastSpin==='full' ? 400 : 100) * scoreMult());
       score += gain;
       $('#score').textContent = score;
       texts.push({x:bc.width/2, y:bc.height*0.42,
@@ -747,8 +750,9 @@ function clearLines(){
     const risk = 1 + Math.min(0.6, Math.max(0, (stackH - 9) / 15));
     if(risk > 1) gain = Math.round(gain * risk);
 
-    gain *= scoreMult();
-    if(churs) gain += 300 * churs * scoreMult();   // 츄르 칸은 덤
+    // 여기도 반올림해서 맺는다. 위 T-스핀 자리와 같은 이유다.
+    gain = Math.round(gain * scoreMult());
+    if(churs) gain += Math.round(300 * churs * scoreMult());   // 츄르 칸은 덤
     b2b = hard;
     score += gain;
     showCombo();
