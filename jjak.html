@@ -213,8 +213,11 @@ let W = 0, H = 0, TW = 0, TH = 0;
 
 // 눈요기
 let fx = [];              // 사라지는 패
+let bits = [];            // 튀는 조각
 let lines = [];           // 이어진 길
 let texts = [];           // 떠오르는 점수
+let bornT = 0;            // 새 판이 살아 들어오는 동안
+let pulse = 0;            // 고른 패가 숨 쉬는 박자
 let shake = 0, flash = 0;
 let wrongCell = null, wrongT = 0;
 let shuffleT = 0;
@@ -402,6 +405,7 @@ function newBoard(){
   shuffled(bag);
   place(bag);
   pick = null;
+  bornT = 1;                       // 살아 들어오는 시늉
   // 처음부터 막힌 판이 나올 수도 있으니 한 번 확인한다.
   if (!findAnyMove()) shuffleBoard(true);
   refreshHud();
@@ -691,7 +695,9 @@ function drawTile(x, y, k, opt){
   cx.globalAlpha = opt.alpha == null ? 1 : opt.alpha;
   cx.translate(p.cx, p.cy);
   cx.scale(sc, sc);
+  if (opt.spin) cx.rotate(opt.spin);
   cx.translate(-p.cx, -p.cy);
+  if (opt.nudge) cx.translate(opt.nudge, 0);
 
   /* 겹쳐 있는 걸 어떻게 보일까.
 
@@ -752,12 +758,32 @@ function draw(){
       if (!st.length) continue;
       const on  = pick && pick.x === x && pick.y === y;
       const bad = wrongCell && wrongCell.x === x && wrongCell.y === y && wrongT > 0;
-      drawTile(x, y, st[st.length - 1], { on: on, bad: bad, depth: st.length });
+      // 새 판은 가운데에서 바깥으로 차례차례 살아 들어온다.
+      let born = 1;
+      if (bornT > 0){
+        const d = Math.hypot(x - (COLS-1)/2, y - (ROWS-1)/2) / 4.3;
+        born = Math.max(0, Math.min(1, (1 - bornT) * 2.2 - d));
+      }
+      if (born <= 0) continue;
+      // 고른 패는 조금씩 커졌다 작아졌다 한다
+      const sc = (on ? 1 + Math.sin(pulse * 6) * 0.045 : 1) * (0.6 + born * 0.4);
+      // 못 잇는 짝을 짚으면 좌우로 흔들린다
+      const nx = bad ? Math.sin(wrongT * 46) * TW * 0.11 : 0;
+      drawTile(x, y, st[st.length - 1],
+               { on: on, bad: bad, depth: st.length, scale: sc, alpha: born, nudge: nx });
     }
 
   // 사라지는 중인 패
   for (const f of fx){
-    drawTile(f.x, f.y, f.k, { scale: 1 + (1 - f.life) * 0.55, alpha: Math.max(0, f.life) });
+    drawTile(f.x, f.y, f.k, { scale: 1 + (1 - f.life) * 0.55, alpha: Math.max(0, f.life),
+                              spin: f.spin * (1 - f.life) });
+  }
+
+  for (const b of bits){
+    cx.globalAlpha = Math.max(0, b.life);
+    cx.fillStyle = b.c;
+    cx.beginPath(); cx.arc(b.x, b.y, Math.max(0, b.r * b.life), 0, 6.284); cx.fill();
+    cx.globalAlpha = 1;
   }
 
   // 이어진 길
@@ -766,8 +792,11 @@ function draw(){
     cx.strokeStyle = '#6fe3c4';
     cx.lineWidth = Math.max(2.5, Math.min(TW, TH) * 0.10);
     cx.lineJoin = cx.lineCap = 'round';
+    // 길은 한 번에 나타나지 않고 A 에서 B 로 그어진다. 어느 길로
+    // 이어졌는지가 눈에 남아야 다음 수가 보인다.
+    const upto = Math.max(1, Math.ceil(ln.pts.length * Math.min(1, ln.grow)));
     cx.beginPath();
-    ln.pts.forEach(([px, py], i) => {
+    ln.pts.slice(0, upto).forEach(([px, py], i) => {
       const q = tileAt(px, py);
       i ? cx.lineTo(q.cx, q.cy) : cx.moveTo(q.cx, q.cy);
     });
@@ -850,9 +879,11 @@ function match(a, b, path){
   const gain = Math.round(BASE * m);
   score += gain;
 
-  fx.push({ x: a.x, y: a.y, k: k, life: 1 });
-  fx.push({ x: b.x, y: b.y, k: k, life: 1 });
-  lines.push({ pts: path, life: 1 });
+  fx.push({ x: a.x, y: a.y, k: k, life: 1, spin: (Math.random() - .5) * 2.2 });
+  fx.push({ x: b.x, y: b.y, k: k, life: 1, spin: (Math.random() - .5) * 2.2 });
+  lines.push({ pts: path, life: 1, grow: 0 });
+  const col = KIND_COLOR[k];
+  for (const t of [a, b]){ const q = tileAt(t.x, t.y); burst(q.cx, q.cy, col, 7); }
 
   const mid = tileAt((a.x + b.x) / 2, (a.y + b.y) / 2);
   say(mid.cx, mid.cy, '+' + gain + (m > 1 ? ' ×' + m : ''),
@@ -878,6 +909,16 @@ function match(a, b, path){
   if (!findAnyMove()) shuffleBoard(false);
 }
 
+// 짝이 맞을 때 조각이 튄다. 그냥 사라지기만 하면 없어진 건 알겠는데
+// 없앤 맛이 없다. 손으로 한 일에는 손맛이 따라와야 한다.
+function burst(px, py, color, n){
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * 6.284, sp = 40 + Math.random() * 130;
+    bits.push({ x: px, y: py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40,
+                c: color, life: 1, r: Math.min(TW, TH) * (0.04 + Math.random() * 0.05) });
+  }
+}
+
 function say(x, y, str, color, size){
   texts.push({ x: x, y: y, str: str, color: color, size: size, life: 1, vy: -22 });
 }
@@ -897,7 +938,7 @@ function refreshHud(){
 function startGame(){
   score = 0; combo = 0; lastHit = -99; boards = 0;
   left = ROUND; over = false; started = true;
-  fx = []; lines = []; texts = [];
+  fx = []; bits = []; lines = []; texts = [];
   shake = flash = shuffleT = wrongT = 0; wrongCell = null;
   newBoard();
   $('#startScreen').classList.add('hide');
@@ -942,7 +983,18 @@ function tick(t){
   }
 
   for (let i = fx.length - 1; i >= 0; i--){ fx[i].life -= dt * 3.4; if (fx[i].life <= 0) fx.splice(i, 1); }
-  for (let i = lines.length - 1; i >= 0; i--){ lines[i].life -= dt * 3.0; if (lines[i].life <= 0) lines.splice(i, 1); }
+  for (let i = lines.length - 1; i >= 0; i--){
+    lines[i].grow += dt * 7;                    // A 에서 B 로 그어진다
+    if (lines[i].grow >= 1) lines[i].life -= dt * 3.0;
+    if (lines[i].life <= 0) lines.splice(i, 1);
+  }
+  for (let i = bits.length - 1; i >= 0; i--){
+    const b = bits[i];
+    b.vy += 520 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt * 1.9;
+    if (b.life <= 0) bits.splice(i, 1);
+  }
+  pulse += dt;
+  if (bornT > 0) bornT = Math.max(0, bornT - dt * 1.5);
   for (let i = texts.length - 1; i >= 0; i--){
     texts[i].life -= dt * 1.5; texts[i].y += texts[i].vy * dt;
     if (texts[i].life <= 0) texts.splice(i, 1);

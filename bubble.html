@@ -191,6 +191,9 @@ let W = 0, H = 0, D = 0, R = 0, ROWH = 0, TOPY = 0, DEATHY = 0, GUNY = 0;
 
 // 눈요기
 let pops = [], texts = [], falling = [];
+let bits = [];            // 튀는 조각
+let wobble = [];          // 붙는 순간 흔들리는 자리 {r,c,life,amp}
+let trail = [];           // 날아가는 냥이 남기는 자국
 let shake = 0, flash = 0;
 let raf = 0, lastT = 0;
 
@@ -431,10 +434,34 @@ function draw(){
       if (k == null) continue;
       const p = cellPos(r, c);
       if (p.y - R > H) continue;
-      catBall(p.x, p.y, R, k);
+      // 붙는 순간 눌렸다 펴진다
+      const w = wobble.find(v => v.r === r && v.c === c);
+      if (w){
+        const t = 1 - w.life;
+        const k2 = Math.sin(t * 22) * w.amp * (w.life * w.life);
+        cx.save();
+        cx.translate(p.x, p.y);
+        cx.scale(1 + k2 * 0.22, 1 - k2 * 0.18);
+        cx.translate(-p.x, -p.y);
+        catBall(p.x, p.y, R, k);
+        cx.restore();
+      } else {
+        catBall(p.x, p.y, R, k);
+      }
     }
 
-  for (const f of falling) catBall(f.x, f.y, R, f.c, Math.max(0, f.life));
+  for (const f of falling){
+    cx.save();
+    cx.translate(f.x, f.y); cx.rotate(f.rot); cx.translate(-f.x, -f.y);
+    catBall(f.x, f.y, R, f.c, Math.max(0, f.life));
+    cx.restore();
+  }
+  for (const b of bits){
+    cx.globalAlpha = Math.max(0, b.life);
+    cx.fillStyle = b.c;
+    cx.beginPath(); cx.arc(b.x, b.y, Math.max(0, b.r * b.life), 0, 6.284); cx.fill();
+    cx.globalAlpha = 1;
+  }
   for (const p of pops){
     const g = 1 - p.life;
     cx.globalAlpha = Math.max(0, p.life);
@@ -454,6 +481,14 @@ function draw(){
   // 다음 냥
   catBall(W - R * 1.1, GUNY + R * 0.3, R * 0.62, nextC);
 
+  // 날아간 자국 — 어디로 갔는지 눈이 따라갈 수 있게
+  for (let i = 0; i < trail.length; i++){
+    const t = trail[i], a = (i + 1) / trail.length * 0.32;
+    cx.globalAlpha = a;
+    cx.fillStyle = C_COL[curC];
+    cx.beginPath(); cx.arc(t.x, t.y, R * (0.30 + a), 0, 6.284); cx.fill();
+    cx.globalAlpha = 1;
+  }
   if (ball) catBall(ball.x, ball.y, R, ball.c);
 
   for (const t of texts){
@@ -545,6 +580,10 @@ function land(){
   const [r, c] = cell;
   rows[r].cells[c] = ball.c;
   ball = null;
+  trail = [];
+  shakeCell(r, c, 1);
+  for (const [nr, nc] of neighbors(r, c))
+    if (rows[nr].cells[nc] != null) shakeCell(nr, nc, 0.42);
 
   const group = sameGroup(r, c);
   let popped = 0, fell = 0, gain = 0;
@@ -555,6 +594,7 @@ function land(){
     for (const [rr, cc] of group){
       const p = cellPos(rr, cc);
       pops.push({ x: p.x, y: p.y, c: rows[rr].cells[cc], life: 1 });
+      burst(p.x, p.y, C_COL[rows[rr].cells[cc]], 8);
       rows[rr].cells[cc] = null;
     }
     popped = group.length;
@@ -563,7 +603,9 @@ function land(){
     const loose = findFloating();
     for (const [rr, cc] of loose){
       const p = cellPos(rr, cc);
-      falling.push({ x: p.x, y: p.y, c: rows[rr].cells[cc], vy: 60 + Math.random() * 40, life: 1 });
+      falling.push({ x: p.x, y: p.y, c: rows[rr].cells[cc],
+                     vx: (Math.random() - .5) * 90, vy: 60 + Math.random() * 40,
+                     rot: 0, spin: (Math.random() - .5) * 7, life: 1 });
       rows[rr].cells[cc] = null;
     }
     fell = loose.length;
@@ -604,6 +646,9 @@ function afterShot(hit){
 }
 
 function pushRow(){
+  // 줄이 끼어들면 아래 자리 번호가 통째로 밀린다. 흔들리던 자리를
+  // 그대로 두면 엉뚱한 냥이 흔들린다.
+  wobble = [];
   rows.unshift(newRow(!rows[0].odd, true));
   // 맨 아랫줄이 화면 밖으로 나가면 지운다. 안 그러면 줄이 끝없이 쌓인다.
   while (rows.length > 1 && cellPos(rows.length - 1, 0).y - R > H) rows.pop();
@@ -615,6 +660,20 @@ function checkOver(){
   for (let r = 0; r < rows.length; r++)
     for (let c = 0; c < rowLen(r); c++)
       if (rows[r].cells[c] != null && cellPos(r, c).y + R > DEATHY) return endGame();
+}
+
+// 터질 때 조각이 튄다. 고리만 번지고 마니 터뜨린 맛이 없었다.
+function burst(px, py, color, n){
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * 6.284, sp = 60 + Math.random() * 190;
+    bits.push({ x: px, y: py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60,
+                c: color, life: 1, r: R * (0.10 + Math.random() * 0.13) });
+  }
+}
+
+// 붙는 순간 그 자리와 이웃이 흔들린다. 딱 붙는 느낌이 여기서 난다.
+function shakeCell(r, c, amp){
+  wobble.push({ r: r, c: c, life: 1, amp: amp });
 }
 
 function say(x, y, str, color, size){
@@ -692,7 +751,7 @@ function startGame(){
   while (TOPY + rows.length * ROWH + R < DEATHY + ROWH * 2) rows.push(newRow(rows.length % 2 === 1, false));
   score = 0; combo = 0; shots = 0; dropped = 0; untilRow = ADD_FROM;
   ball = null; over = false; started = true;
-  pops = []; texts = []; falling = [];
+  pops = []; texts = []; falling = []; bits = []; wobble = []; trail = [];
   shake = flash = 0; aim = -Math.PI/2;
   curC = pickColor(); nextC = pickColor();
   $('#dropped').textContent = 0;
@@ -737,9 +796,22 @@ function tick(t){
   }
 
   for (let i = pops.length - 1; i >= 0; i--){ pops[i].life -= dt * 2.6; if (pops[i].life <= 0) pops.splice(i,1); }
+  for (let i = bits.length - 1; i >= 0; i--){
+    const b = bits[i];
+    b.vy += 700 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt * 1.7;
+    if (b.life <= 0) bits.splice(i,1);
+  }
+  for (let i = wobble.length - 1; i >= 0; i--){
+    wobble[i].life -= dt * 4.2; if (wobble[i].life <= 0) wobble.splice(i,1);
+  }
+  if (ball){
+    trail.push({ x: ball.x, y: ball.y });
+    if (trail.length > 7) trail.shift();
+  }
   for (let i = falling.length - 1; i >= 0; i--){
     const f = falling[i];
-    f.vy += 900 * dt; f.y += f.vy * dt; f.life -= dt * 0.9;
+    f.vy += 900 * dt; f.y += f.vy * dt; f.x += (f.vx || 0) * dt;
+    f.rot = (f.rot || 0) + (f.spin || 0) * dt; f.life -= dt * 0.9;
     if (f.life <= 0 || f.y > H + R) falling.splice(i,1);
   }
   for (let i = texts.length - 1; i >= 0; i--){
