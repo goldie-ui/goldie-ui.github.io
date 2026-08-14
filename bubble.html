@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/favicon.png">
+<meta name="theme-color" content="#0e0f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="골디게임">
+<title>뽀글냥</title>
+<style>
+  :root{
+    --bg:#0d1120; --board:#151b2e; --line:rgba(255,255,255,.09);
+    --text:#eef1fa; --muted:#a3adc9; --faint:#6d7794;
+    --accent:#7cd4ff; --accent2:#b98cff;
+  }
+  /* 폰에서 빠르게 두 번 누르면 화면이 확대되고, 그러면서 글자가 잡혀
+     '복사하기' 딱지가 떴다. 게임 화면에서 글자를 집을 일은 없으니
+     아예 못 잡게 하고, 두 번 눌러 확대하는 것도 막는다. */
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;
+    -webkit-touch-callout:none; user-select:none; -webkit-user-select:none}
+  html,body{touch-action:manipulation; overscroll-behavior:none}
+  body{
+    font-family:"Pretendard","Apple SD Gothic Neo",-apple-system,BlinkMacSystemFont,
+      "Segoe UI",system-ui,sans-serif;
+    background:radial-gradient(760px 520px at 50% -8%,#26315c 0%,transparent 60%),var(--bg);
+    color:var(--text); min-height:100vh; padding:16px 14px 24px;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .back{align-self:flex-start; color:var(--muted); text-decoration:none; font-size:14px}
+  .back:hover{color:var(--text)}
+  h1{font-size:26px; font-weight:900; letter-spacing:-.03em; margin:6px 0 2px;
+    background:linear-gradient(104deg,#fff,#9fe0ff 55%,#c9a7ff);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  .sub{color:var(--faint); font-size:12px; margin-bottom:10px}
+
+  .hud{width:100%; max-width:400px; display:flex; align-items:stretch; gap:8px; margin-bottom:8px}
+  .score{flex:1; background:var(--board); border:1px solid var(--line); border-radius:13px;
+    padding:7px 11px}
+  .score .k{font-size:10px; color:var(--faint); letter-spacing:.1em; text-transform:uppercase}
+  .score .v{font-size:20px; font-weight:900; font-variant-numeric:tabular-nums; line-height:1.15}
+  .score.warn .v{color:#ff8f8f}
+
+  .goal{width:100%; max-width:400px; display:flex; align-items:center; gap:9px;
+    margin:0 auto 8px; font-size:11.5px; color:var(--muted)}
+  .goal .st{white-space:nowrap}
+  .goal .st b{color:var(--accent); font-weight:800}
+  .goal .bar{flex:1; height:6px; border-radius:99px;
+    background:rgba(255,255,255,.10); overflow:hidden}
+  .goal .bar i{display:block; height:100%; width:0;
+    background:linear-gradient(90deg,#7cd4ff,#b98cff); transition:width .18s ease}
+  .goal .num{white-space:nowrap; font-variant-numeric:tabular-nums}
+  .goal .num b{color:var(--text); font-weight:800}
+
+  /* 지금 1등을 쫓는 띠. 앱에서 켜야 순위가 넘어온다. */
+  .chase{width:100%; max-width:400px; display:flex; align-items:center; gap:9px;
+    margin:0 auto 10px; font-size:11.5px; color:#9fd3ff}
+  .chase.hide{display:none}
+  .chase .who{font-weight:700; white-space:nowrap; max-width:34%;
+    overflow:hidden; text-overflow:ellipsis}
+  .chase .bar{flex:1; height:5px; border-radius:99px;
+    background:rgba(255,255,255,.10); overflow:hidden}
+  .chase .bar i{display:block; height:100%; width:0;
+    background:linear-gradient(90deg,#7cd4ff,#ffd85b); transition:width .35s ease}
+  .chase .val{font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .chase.won{color:#ffd85b}
+  .chase.won .bar i{background:#ffd85b; animation:chasePulse 1.1s ease-in-out infinite}
+  @keyframes chasePulse{50%{opacity:.4}}
+
+  .stage{position:relative; width:100%; max-width:352px}
+  canvas{display:block; width:100%; height:auto; background:var(--board);
+    border:1px solid var(--line); border-radius:16px; touch-action:none;
+    aspect-ratio:7/10}
+
+  .screen{position:absolute; inset:0; border-radius:16px; z-index:5;
+    background:rgba(9,13,25,.96);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:12px; padding:20px; text-align:center}
+  .screen.hide{display:none}
+  .screen h2{font-size:25px; font-weight:900}
+  .screen p{color:var(--muted); font-size:13px; line-height:1.6}
+  .btn{background:linear-gradient(120deg,var(--accent),var(--accent2)); color:#06131f;
+    border:none; border-radius:13px; padding:12px 30px; font-weight:900; font-size:16px;
+    cursor:pointer}
+  .btn:active{transform:scale(.97)}
+
+  .hint{width:100%; max-width:400px; margin-top:10px; text-align:center;
+    font-size:10.5px; color:var(--faint); line-height:1.7}
+  .hint b{color:var(--muted); font-weight:700}
+
+  @media (max-width:640px){
+    body{padding:12px 12px 14px}
+    h1{font-size:22px}
+    .sub{font-size:11px; margin-bottom:8px}
+    .score{padding:6px 9px}
+    .score .v{font-size:18px}
+    .hint{display:none}
+  }
+</style>
+</head>
+<body>
+<a class="back" href="index.html">← 골디 게임</a>
+<h1>🫧 뽀글냥</h1>
+<div class="sub">겨눠서 쏘고, 같은 냥 셋을 붙여 터뜨리기</div>
+
+<div class="hud">
+  <div class="score"><div class="k">점수</div><div class="v" id="score">0</div></div>
+  <div class="score"><div class="k">최고</div><div class="v" id="best">0</div></div>
+  <div class="score" id="dropBox"><div class="k">떨어뜨림</div><div class="v" id="dropped">0</div></div>
+</div>
+
+<div class="goal">
+  <span class="st">줄 내려오기 <b id="untilRow">5</b></span>
+  <span class="bar" id="goalBar"><i id="goalFill"></i></span>
+  <span class="num">연속 <b id="combo">0</b></span>
+</div>
+
+<div class="chase hide" id="chase">
+  <span class="who" id="chaseWho">1등</span>
+  <span class="bar"><i id="chaseFill"></i></span>
+  <span class="val" id="chaseVal">0</span>
+</div>
+
+<div class="stage">
+  <canvas id="cv"></canvas>
+  <div class="screen" id="startScreen">
+    <h2>🫧 뽀글냥</h2>
+    <p>화면을 끌어 <b>겨누고</b> 손을 떼면 쏩니다.<br>
+       같은 냥 <b>셋</b>이 붙으면 터져요.<br>
+       매달린 데가 끊긴 냥은 <b>우수수 떨어집니다</b> — 여기가 제일 큽니다.</p>
+    <button class="btn" id="startBtn">시작</button>
+  </div>
+  <div class="screen hide" id="overScreen">
+    <h2 id="overTitle">끝!</h2>
+    <p id="overText"></p>
+    <button class="btn" id="againBtn">다시 하기</button>
+  </div>
+</div>
+
+<p class="hint">
+  끌어서 겨누고 떼면 발사 · 벽에 <b>튕겨서</b> 구석도 노릴 수 있어요<br>
+  터뜨린 것보다 <b>떨어뜨린 것</b>이 네 배 값 · 연달아 터뜨리면 <b>연속 배수</b>
+</p>
+
+<script>
+const $ = s => document.querySelector(s);
+const cv = document.getElementById('cv');
+const cx = cv.getContext('2d', { alpha: false });
+const BOARD_BG = '#151b2e';
+
+/* ---------------- 판 ----------------
+   육각으로 쌓인다. 짝수 줄은 여덟 개, 홀수 줄은 반 칸 밀려 일곱 개다.
+   줄마다 홀짝을 따로 들고 다니는 건, 위에 새 줄이 끼어들면 아래 줄들의
+   홀짝이 통째로 뒤집히기 때문이다. 줄 번호로 홀짝을 정하면 이미 놓인
+   냥들의 자리가 한 칸씩 어긋난다. */
+const COLS = 8;
+const COLORS = 5;
+const START_ROWS = 4;
+// 이만큼 쏘면 위에서 한 줄 내려온다.
+//
+// 다섯으로 뒀더니 잘 겨누는 봇도 스물네 발에 끝났다. 한 줄이 일고여덟
+// 개인데 한 번 터뜨려야 셋이 없어지니, 다섯 발마다 줄이 오면 두 발에
+// 한 번씩 터뜨려야 겨우 본전이다. 그건 버티기지 겨루기가 아니다.
+const ADD_EVERY = 8;
+
+let rows = [];                  // [{odd:bool, cells:[색 또는 null]}]
+let ball = null;                // 날아가는 냥 {x,y,vx,vy,c}
+let nextC = 0, curC = 0;
+let aim = -Math.PI / 2;         // 겨누는 쪽
+let aiming = false;
+let shots = 0, dropped = 0;
+let score = 0, best = 0;
+let combo = 0;
+let over = false, started = false;
+
+let W = 0, H = 0, D = 0, R = 0, ROWH = 0, TOPY = 0, DEATHY = 0, GUNY = 0;
+
+// 눈요기
+let pops = [], texts = [], falling = [];
+let shake = 0, flash = 0;
+let raf = 0, lastT = 0;
+
+const BEST_KEY = 'bubble_best';
+try { best = +(localStorage.getItem(BEST_KEY) || 0); } catch (e) {}
+$('#best').textContent = best.toLocaleString('ko-KR');
+
+// 최고점은 판이 끝났을 때만 적는다. 노는 도중에 적으면 바깥 앱이 그걸
+// 5초마다 읽어다 올려서, 한 판에 순위 알림이 몇 번씩 울린다.
+window.saveBest = function () {
+  try {
+    if (score > best) best = score;
+    if (best > 0) localStorage.setItem(BEST_KEY, best);
+  } catch (e) {}
+};
+addEventListener('pagehide', window.saveBest);
+
+/* ---------------- 점수 ----------------
+   터뜨린 것보다 떨어뜨린 것을 훨씬 크게 친다. 셋을 맞춰 터뜨리는 건
+   눈에 보이는 대로 하면 되지만, 매달린 데를 끊어 우수수 떨어뜨리려면
+   어디를 끊어야 할지 미리 봐야 한다. 그게 이 게임의 실력이다. */
+const POP_PT = 80, DROP_PT = 400;
+const COMBO_TIERS = [
+  { at: 2,  m: 1.2 },
+  { at: 4,  m: 1.5 },
+  { at: 6,  m: 2   },
+  { at: 9,  m: 2.5 },
+  { at: 13, m: 3   },
+  { at: 18, m: 4   },
+  { at: 24, m: 5   },
+];
+function comboMult(){
+  let m = 1;
+  for (const t of COMBO_TIERS){ if (combo >= t.at) m = t.m; else break; }
+  return m;
+}
+
+/* ---------------- 자리 ---------------- */
+const rowLen = r => COLS - (rows[r].odd ? 1 : 0);
+function cellPos(r, c){
+  const off = rows[r].odd ? D : D / 2;
+  return { x: off + c * D, y: TOPY + r * ROWH + R };
+}
+
+// 육각 이웃. 짝수 줄(반 칸 왼쪽)에서 위아래 이웃은 (c-1, c),
+// 홀수 줄(반 칸 오른쪽)에서는 (c, c+1) 이다. 반 칸 밀린 방향이 반대라
+// 그렇다. 여기를 헷갈리면 터질 것이 안 터진다.
+function neighbors(r, c){
+  const out = [];
+  const push = (rr, cc) => {
+    if (rr < 0 || rr >= rows.length) return;
+    if (cc < 0 || cc >= rowLen(rr)) return;
+    out.push([rr, cc]);
+  };
+  push(r, c - 1); push(r, c + 1);
+  const shift = rows[r].odd ? 0 : -1;
+  push(r - 1, c + shift); push(r - 1, c + shift + 1);
+  push(r + 1, c + shift); push(r + 1, c + shift + 1);
+  return out;
+}
+
+function newRow(odd, fill){
+  const n = COLS - (odd ? 1 : 0);
+  const cells = [];
+  for (let i = 0; i < n; i++) cells.push(fill ? (Math.random() * COLORS) | 0 : null);
+  return { odd: odd, cells: cells };
+}
+
+function liveColors(){
+  const set = new Set();
+  for (const row of rows) for (const c of row.cells) if (c != null) set.add(c);
+  return [...set];
+}
+// 판에 없는 색을 쥐여 주면 쏠 데가 없다. 남아 있는 색에서만 뽑는다.
+function pickColor(){
+  const live = liveColors();
+  if (!live.length) return (Math.random() * COLORS) | 0;
+  return live[(Math.random() * live.length) | 0];
+}
+
+/* ---------------- 판 크기 ----------------
+   판을 못박아 두면 앱 안에서 넘친다. 앱은 위에 머리띠가 있어 게임에
+   남는 높이가 폰 화면보다 50~90px 짧다. 스네이크에서 이걸 못박아 뒀다가
+   판을 깎아먹었다.
+
+   이 판은 7:10 이라 세로가 먼저 찬다. 그래서 남는 높이에서 폭을 되짚어
+   정한다. 냥 한 마리가 30px 아래로 내려가면 겨누기가 어려우니 거기서
+   멈춘다 — 그 아래로는 스크롤을 받아들인다. */
+function fitBoard(){
+  const stage = document.querySelector('.stage');
+  if (!stage) return;
+  const top = stage.getBoundingClientRect().top;
+  const avail = window.innerHeight - top - 14;      // 아래 숨통
+  const byH = avail * 7 / 10;                       // 높이에서 폭을 낸다
+  stage.style.maxWidth = Math.floor(Math.max(COLS * 30, Math.min(352, byH))) + 'px';
+}
+
+// 버퍼를 화면에 보이는 크기 그대로 잡는다. 안 그러면 그림이 늘어진다.
+function layout(){
+  fitBoard();
+  const r = cv.getBoundingClientRect();
+  if (!r.width) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width  = Math.round(r.width  * dpr);
+  cv.height = Math.round(r.height * dpr);
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  W = r.width; H = r.height;
+  D = W / COLS; R = D / 2;
+  ROWH = D * 0.866;              // 육각으로 쌓으면 줄 간격이 지름의 √3/2
+  TOPY = R * 0.5;
+  GUNY = H - R * 1.5;
+  DEATHY = GUNY - R * 1.8;
+}
+
+/* ---------------- 그림 ---------------- */
+const C_COL = ['#ff7a9c','#6fd4ff','#7ee0a8','#ffd166','#c9a7ff'];
+
+function catBall(x, y, r, ci, alpha){
+  cx.save();
+  if (alpha != null) cx.globalAlpha = alpha;
+  const col = C_COL[ci];
+  // 귀
+  cx.fillStyle = col;
+  cx.beginPath();
+  cx.moveTo(x - r*.66, y - r*.44); cx.lineTo(x - r*.36, y - r*.98); cx.lineTo(x - r*.06, y - r*.56);
+  cx.closePath(); cx.fill();
+  cx.beginPath();
+  cx.moveTo(x + r*.66, y - r*.44); cx.lineTo(x + r*.36, y - r*.98); cx.lineTo(x + r*.06, y - r*.56);
+  cx.closePath(); cx.fill();
+  // 얼굴
+  cx.beginPath(); cx.arc(x, y, r * .86, 0, 6.284); cx.fill();
+  // 반짝임 — 동그란 것이 여럿이라 빛나는 자리가 있어야 덩어리로 안 뭉친다
+  cx.fillStyle = 'rgba(255,255,255,.30)';
+  cx.beginPath(); cx.ellipse(x - r*.32, y - r*.36, r*.24, r*.17, -0.5, 0, 6.284); cx.fill();
+  // 눈코
+  cx.fillStyle = 'rgba(28,22,32,.80)';
+  cx.beginPath(); cx.ellipse(x - r*.28, y + r*.02, r*.09, r*.13, 0, 0, 6.284); cx.fill();
+  cx.beginPath(); cx.ellipse(x + r*.28, y + r*.02, r*.09, r*.13, 0, 0, 6.284); cx.fill();
+  cx.beginPath();
+  cx.moveTo(x - r*.10, y + r*.26); cx.lineTo(x + r*.10, y + r*.26); cx.lineTo(x, y + r*.38);
+  cx.closePath(); cx.fill();
+  cx.restore();
+}
+
+// 겨누는 줄. 벽에 한 번 튕기는 데까지 미리 보여 준다 — 튕겨서 구석을
+// 노리는 게 이 게임의 맛인데, 안 보여 주면 감으로만 쏘게 된다.
+function drawAim(){
+  let x = W / 2, y = GUNY;
+  let vx = Math.cos(aim), vy = Math.sin(aim);
+  cx.save();
+  cx.setLineDash([5, 7]);
+  cx.strokeStyle = 'rgba(255,255,255,.34)';
+  cx.lineWidth = 2;
+  cx.beginPath(); cx.moveTo(x, y);
+  let bounced = 0, guard = 0;
+  while (guard++ < 900){
+    x += vx * 4; y += vy * 4;
+    if (x < R){ x = R; vx = -vx; if (++bounced > 1) break; cx.lineTo(x, y); }
+    if (x > W - R){ x = W - R; vx = -vx; if (++bounced > 1) break; cx.lineTo(x, y); }
+    if (y < TOPY + R) break;
+    if (hitsAny(x, y)) break;
+  }
+  cx.lineTo(x, y);
+  cx.stroke();
+  cx.restore();
+}
+
+function draw(){
+  // 그리기 도중 잘못된 값이 하나라도 들어가면 자리가 통째로 어긋나
+  // 남아 버린다. 매 판 처음에 좌표를 다시 세워 그 자국을 지운다.
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx.fillStyle = BOARD_BG;
+  cx.fillRect(0, 0, W, H);
+
+  cx.save();
+  if (shake > 0) cx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
+
+  // 넘으면 끝나는 금
+  cx.strokeStyle = 'rgba(255,120,140,.35)';
+  cx.setLineDash([4, 6]); cx.lineWidth = 1.5;
+  cx.beginPath(); cx.moveTo(0, DEATHY); cx.lineTo(W, DEATHY); cx.stroke();
+  cx.setLineDash([]);
+
+  for (let r = 0; r < rows.length; r++)
+    for (let c = 0; c < rowLen(r); c++){
+      const k = rows[r].cells[c];
+      if (k == null) continue;
+      const p = cellPos(r, c);
+      if (p.y - R > H) continue;
+      catBall(p.x, p.y, R, k);
+    }
+
+  for (const f of falling) catBall(f.x, f.y, R, f.c, Math.max(0, f.life));
+  for (const p of pops){
+    const g = 1 - p.life;
+    cx.globalAlpha = Math.max(0, p.life);
+    cx.strokeStyle = C_COL[p.c];
+    cx.lineWidth = Math.max(1.5, R * 0.22 * p.life);
+    cx.beginPath(); cx.arc(p.x, p.y, Math.max(0, R * (0.5 + g * 1.3)), 0, 6.284);
+    cx.stroke();
+    cx.globalAlpha = 1;
+  }
+
+  if (started && !over && !ball) drawAim();
+
+  // 쏘는 자리
+  cx.fillStyle = 'rgba(255,255,255,.10)';
+  cx.beginPath(); cx.arc(W/2, GUNY, R * 1.16, 0, 6.284); cx.fill();
+  if (!over) catBall(W/2, GUNY, R, curC);
+  // 다음 냥
+  catBall(W - R * 1.1, GUNY + R * 0.3, R * 0.62, nextC);
+
+  if (ball) catBall(ball.x, ball.y, R, ball.c);
+
+  for (const t of texts){
+    cx.globalAlpha = Math.max(0, Math.min(1, t.life));
+    cx.fillStyle = t.color;
+    cx.font = '900 ' + t.size + 'px "Pretendard",system-ui,sans-serif';
+    cx.textAlign = 'center';
+    cx.fillText(t.str, t.x, t.y);
+    cx.globalAlpha = 1;
+  }
+  cx.restore();
+
+  if (flash > 0){
+    cx.fillStyle = 'rgba(255,255,255,' + (flash * 0.15) + ')';
+    cx.fillRect(0, 0, W, H);
+  }
+}
+
+/* ---------------- 부딪히기 ---------------- */
+function hitsAny(x, y){
+  for (let r = 0; r < rows.length; r++)
+    for (let c = 0; c < rowLen(r); c++){
+      if (rows[r].cells[c] == null) continue;
+      const p = cellPos(r, c);
+      const dx = p.x - x, dy = p.y - y;
+      if (dx*dx + dy*dy < (D * 0.92) * (D * 0.92)) return true;
+    }
+  return false;
+}
+
+// 날아온 냥이 앉을 빈자리. 붙어 있는 곳 옆이거나 천장이라야 한다.
+function snapCell(x, y){
+  let best = null, bd = Infinity;
+  for (let r = 0; r < rows.length; r++)
+    for (let c = 0; c < rowLen(r); c++){
+      if (rows[r].cells[c] != null) continue;
+      const p = cellPos(r, c);
+      if (p.y > DEATHY + ROWH) continue;
+      const ok = r === 0 || neighbors(r, c).some(([rr, cc]) => rows[rr].cells[cc] != null);
+      if (!ok) continue;
+      const dx = p.x - x, dy = p.y - y;
+      const dd = dx*dx + dy*dy;
+      if (dd < bd){ bd = dd; best = [r, c]; }
+    }
+  return best;
+}
+
+function sameGroup(r, c){
+  const col = rows[r].cells[c];
+  const seen = new Set([r + ',' + c]);
+  const out = [[r, c]], st = [[r, c]];
+  while (st.length){
+    const [cr, cc] = st.pop();
+    for (const [nr, nc] of neighbors(cr, cc)){
+      const key = nr + ',' + nc;
+      if (seen.has(key)) continue;
+      if (rows[nr].cells[nc] !== col) continue;
+      seen.add(key); out.push([nr, nc]); st.push([nr, nc]);
+    }
+  }
+  return out;
+}
+
+// 천장에 매달려 있지 않은 냥들. 여기를 끊는 게 이 게임의 큰 한 방이다.
+function findFloating(){
+  const held = new Set();
+  const st = [];
+  for (let c = 0; c < rowLen(0); c++)
+    if (rows[0].cells[c] != null){ held.add('0,' + c); st.push([0, c]); }
+  while (st.length){
+    const [cr, cc] = st.pop();
+    for (const [nr, nc] of neighbors(cr, cc)){
+      const key = nr + ',' + nc;
+      if (held.has(key) || rows[nr].cells[nc] == null) continue;
+      held.add(key); st.push([nr, nc]);
+    }
+  }
+  const out = [];
+  for (let r = 0; r < rows.length; r++)
+    for (let c = 0; c < rowLen(r); c++)
+      if (rows[r].cells[c] != null && !held.has(r + ',' + c)) out.push([r, c]);
+  return out;
+}
+
+/* ---------------- 한 발 ---------------- */
+function land(){
+  const cell = snapCell(ball.x, ball.y);
+  if (!cell){ ball = null; afterShot(false); return; }
+  const [r, c] = cell;
+  rows[r].cells[c] = ball.c;
+  ball = null;
+
+  const group = sameGroup(r, c);
+  let popped = 0, fell = 0, gain = 0;
+
+  if (group.length >= 3){
+    combo++;
+    const m = comboMult();
+    for (const [rr, cc] of group){
+      const p = cellPos(rr, cc);
+      pops.push({ x: p.x, y: p.y, c: rows[rr].cells[cc], life: 1 });
+      rows[rr].cells[cc] = null;
+    }
+    popped = group.length;
+    gain += Math.round(POP_PT * popped * m);
+
+    const loose = findFloating();
+    for (const [rr, cc] of loose){
+      const p = cellPos(rr, cc);
+      falling.push({ x: p.x, y: p.y, c: rows[rr].cells[cc], vy: 60 + Math.random() * 40, life: 1 });
+      rows[rr].cells[cc] = null;
+    }
+    fell = loose.length;
+    if (fell){
+      gain += Math.round(DROP_PT * fell * m);
+      dropped += fell;
+      $('#dropped').textContent = dropped;
+      flash = 1; shake = Math.min(14, 5 + fell);
+      say(W/2, H*0.42, fell + '개 떨어짐! +' + Math.round(DROP_PT * fell * m).toLocaleString('ko-KR'),
+          '#ffd85b', 22);
+      dropSound();
+    } else {
+      shake = Math.max(shake, 4);
+      popSound(popped);
+    }
+    score += gain;
+    const p0 = cellPos(r, c);
+    say(p0.x, p0.y, '+' + gain.toLocaleString('ko-KR') + (m > 1 ? ' ×' + m : ''),
+        m > 1 ? '#ffd85b' : '#9fe4ff', m > 1 ? 20 : 17);
+    if (COMBO_TIERS.some(t => t.at === combo)){
+      say(W/2, H*0.30, combo + '연속 ×' + m, '#ffd85b', 24);
+      flash = Math.max(flash, .5);
+    }
+  } else {
+    combo = 0;
+    stickSound();
+  }
+  afterShot(popped > 0);
+}
+
+function afterShot(hit){
+  shots++;
+  // 못 터뜨린 발이 쌓이면 줄이 내려온다. 아무렇게나 쏘면 금방 차오른다.
+  if (shots % ADD_EVERY === 0) pushRow();
+  curC = nextC; nextC = pickColor();
+  refreshHud();
+  checkOver();
+}
+
+function pushRow(){
+  rows.unshift(newRow(!rows[0].odd, true));
+  // 맨 아랫줄이 화면 밖으로 나가면 지운다. 안 그러면 줄이 끝없이 쌓인다.
+  while (rows.length > 1 && cellPos(rows.length - 1, 0).y - R > H) rows.pop();
+  say(W/2, TOPY + R, '줄이 내려왔다', '#ff9fb5', 17);
+  rowSound();
+}
+
+function checkOver(){
+  for (let r = 0; r < rows.length; r++)
+    for (let c = 0; c < rowLen(r); c++)
+      if (rows[r].cells[c] != null && cellPos(r, c).y + R > DEATHY) return endGame();
+}
+
+function say(x, y, str, color, size){
+  texts.push({ x: x, y: y, str: str, color: color, size: size, life: 1, vy: -24 });
+}
+
+function refreshHud(){
+  $('#score').textContent = score.toLocaleString('ko-KR');
+  $('#combo').textContent = combo;
+  const until = ADD_EVERY - (shots % ADD_EVERY);
+  $('#untilRow').textContent = until;
+  $('#goalFill').style.width = ((ADD_EVERY - until) / ADD_EVERY * 100) + '%';
+  bumpChase(score);
+}
+
+/* ---------------- 겨누기 ---------------- */
+function setAim(ev){
+  const r = cv.getBoundingClientRect();
+  const x = (ev.clientX - r.left) / r.width * W;
+  const y = (ev.clientY - r.top) / r.height * H;
+  let a = Math.atan2(y - GUNY, x - W/2);
+  // 위쪽으로만 쏜다. 옆으로 눕히면 영영 안 닿는 발이 나온다.
+  const LIM = 0.20;
+  if (a > -LIM) a = -LIM;
+  if (a < -Math.PI + LIM) a = -Math.PI + LIM;
+  aim = a;
+}
+cv.addEventListener('pointerdown', ev => {
+  ev.preventDefault();
+  if (!started || over || ball) return;
+  aiming = true; setAim(ev);
+});
+cv.addEventListener('pointermove', ev => { if (aiming) setAim(ev); });
+const release = ev => {
+  if (!aiming) return;
+  aiming = false;
+  if (!started || over || ball) return;
+  const SPD = Math.max(520, D * 13);
+  ball = { x: W/2, y: GUNY, vx: Math.cos(aim) * SPD, vy: Math.sin(aim) * SPD, c: curC };
+  shootSound();
+};
+['pointerup','pointercancel','pointerleave'].forEach(e => cv.addEventListener(e, release));
+
+/* ---------------- 한 판 ---------------- */
+function startGame(){
+  layout();
+  rows = [];
+  for (let r = 0; r < START_ROWS; r++) rows.push(newRow(r % 2 === 1, true));
+  // 아래로 조금 더 빈 줄을 깔아 둔다. 앉을 자리가 있어야 한다.
+  while (TOPY + rows.length * ROWH + R < DEATHY + ROWH * 2) rows.push(newRow(rows.length % 2 === 1, false));
+  score = 0; combo = 0; shots = 0; dropped = 0;
+  ball = null; over = false; started = true;
+  pops = []; texts = []; falling = [];
+  shake = flash = 0; aim = -Math.PI/2;
+  curC = pickColor(); nextC = pickColor();
+  $('#dropped').textContent = 0;
+  $('#startScreen').classList.add('hide');
+  $('#overScreen').classList.add('hide');
+  resetChase();
+  refreshHud();
+  go();
+}
+
+function endGame(){
+  over = true; started = false;
+  window.saveBest();
+  $('#best').textContent = best.toLocaleString('ko-KR');
+  $('#overTitle').textContent = score >= best && score > 0 ? '최고 기록! 🎉' : '끝!';
+  $('#overText').innerHTML =
+    '점수 <b>' + score.toLocaleString('ko-KR') + '</b><br>떨어뜨린 냥 ' + dropped + '마리';
+  $('#overScreen').classList.remove('hide');
+  overSound();
+}
+
+$('#startBtn').onclick = startGame;
+$('#againBtn').onclick = startGame;
+
+/* ---------------- 흐름 ---------------- */
+function tick(t){
+  const dt = Math.min(0.05, (t - lastT) / 1000 || 0);
+  lastT = t;
+
+  if (ball){
+    // 한 번에 확 옮기면 냥을 뚫고 지나간다. 잘게 나눠 옮기며 살핀다.
+    const steps = 8;
+    for (let i = 0; i < steps && ball; i++){
+      ball.x += ball.vx * dt / steps;
+      ball.y += ball.vy * dt / steps;
+      if (ball.x < R){ ball.x = R; ball.vx = -ball.vx; }
+      if (ball.x > W - R){ ball.x = W - R; ball.vx = -ball.vx; }
+      if (ball.y <= TOPY + R){ ball.y = TOPY + R; land(); break; }
+      if (hitsAny(ball.x, ball.y)){ land(); break; }
+      if (ball.y > H + R){ ball = null; afterShot(false); break; }
+    }
+  }
+
+  for (let i = pops.length - 1; i >= 0; i--){ pops[i].life -= dt * 2.6; if (pops[i].life <= 0) pops.splice(i,1); }
+  for (let i = falling.length - 1; i >= 0; i--){
+    const f = falling[i];
+    f.vy += 900 * dt; f.y += f.vy * dt; f.life -= dt * 0.9;
+    if (f.life <= 0 || f.y > H + R) falling.splice(i,1);
+  }
+  for (let i = texts.length - 1; i >= 0; i--){
+    texts[i].life -= dt * 1.4; texts[i].y += texts[i].vy * dt;
+    if (texts[i].life <= 0) texts.splice(i,1);
+  }
+  if (shake > 0) shake = Math.max(0, shake - dt * 26);
+  if (flash > 0) flash = Math.max(0, flash - dt * 3.2);
+
+  draw();
+  raf = requestAnimationFrame(tick);
+}
+function go(){ if (!raf) raf = requestAnimationFrame(t => { lastT = t; tick(t); }); }
+
+/* ---------------- 소리 ----------------
+   소리통은 하나만 만들어 돌려쓴다. 낼 때마다 새로 만들면 브라우저가
+   정해 둔 개수 한도에 걸려 어느 순간부터 조용해진다. */
+let _ac = null;
+function actx(){
+  if (!_ac){ try { _ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (_ac && _ac.state === 'suspended') _ac.resume();
+  return _ac;
+}
+function tone(freq, dur, type, vol, to){
+  const ac = actx(); if (!ac) return;
+  try {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, ac.currentTime);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, ac.currentTime + dur);
+    g.gain.setValueAtTime(vol || 0.09, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + dur);
+  } catch (e) {}
+}
+function shootSound(){ tone(520, 0.06, 'square', 0.05, 760); }
+function stickSound(){ tone(300, 0.05, 'sine', 0.05); }
+function popSound(n){ tone(560 + Math.min(n,8)*55, 0.11, 'triangle', 0.10); }
+function dropSound(){ [700, 900, 1150, 1450].forEach((f,i) => setTimeout(() => tone(f, 0.16, 'triangle', 0.11), i*70)); }
+function rowSound(){ tone(220, 0.16, 'sawtooth', 0.07, 160); }
+function overSound(){ [520, 440, 350, 260].forEach((f,i) => setTimeout(() => tone(f, 0.21, 'triangle', 0.10), i*125)); }
+addEventListener('pagehide', () => { try { _ac && _ac.close(); _ac = null; } catch (e) {} });
+
+/* ---------------- 지금 1등 ---------------- */
+var topRec = null, passedTop = false;
+try {
+  var _t = JSON.parse(localStorage.getItem('dmc_top_bubble') || 'null');
+  // 내가 1등이어도 띄운다. 1등인 사람도 지킬 기록이 있어야 조마조마하다.
+  if (_t && _t.score > 0) topRec = _t;
+} catch (e) {}
+
+function bumpChase(cur){
+  var el = document.getElementById('chase');
+  if (!el) return;
+  if (!topRec){ el.classList.add('hide'); return; }
+  el.classList.remove('hide');
+  if (!passedTop && cur > topRec.score) passedTop = true;
+  el.classList.toggle('won', passedTop);
+  if (passedTop){
+    document.getElementById('chaseWho').textContent = '👑';
+    document.getElementById('chaseVal').textContent = topRec.mine ? '기록 갱신!' : '1등!';
+    document.getElementById('chaseFill').style.width = '100%';
+  } else {
+    document.getElementById('chaseWho').textContent = topRec.mine ? '👑 내 기록' : topRec.name;
+    document.getElementById('chaseVal').textContent = topRec.score.toLocaleString('ko-KR');
+    document.getElementById('chaseFill').style.width =
+      Math.min(100, cur / topRec.score * 100) + '%';
+  }
+}
+function resetChase(){ passedTop = false; bumpChase(0); }
+bumpChase(0);
+
+layout();
+rows = [];
+for (let r = 0; r < START_ROWS; r++) rows.push(newRow(r % 2 === 1, true));
+while (TOPY + rows.length * ROWH + R < DEATHY + ROWH * 2) rows.push(newRow(rows.length % 2 === 1, false));
+curC = pickColor(); nextC = pickColor();
+let layoutTimer = 0;
+addEventListener('resize', () => {
+  clearTimeout(layoutTimer);
+  layoutTimer = setTimeout(() => { layout(); draw(); }, 120);
+});
+draw();
+</script>
+</body>
+</html>
