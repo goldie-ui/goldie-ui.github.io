@@ -218,6 +218,7 @@ let lines = [];           // 이어진 길
 let texts = [];           // 떠오르는 점수
 let bornT = 0;            // 새 판이 살아 들어오는 동안
 let pulse = 0;            // 고른 패가 숨 쉬는 박자
+let pops = [];            // 없앤 자리에서 터지는 작은 고리
 let rings = [];           // 퍼져 나가는 파문
 let conf = [];            // 흩날리는 색종이
 let tint = null;          // 화면 전체에 도는 빛깔
@@ -782,6 +783,17 @@ function draw(){
                               spin: f.spin * (1 - f.life) });
   }
 
+  for (const p of pops){
+    const g = 1 - p.life;
+    cx.globalAlpha = Math.max(0, p.life) * 0.9;
+    cx.strokeStyle = p.c;
+    cx.lineWidth = Math.max(1, Math.min(TW, TH) * 0.16 * p.life);
+    cx.beginPath();
+    cx.arc(p.x, p.y, Math.max(0, Math.min(TW, TH) * (0.30 + g * 0.85)), 0, 6.284);
+    cx.stroke();
+    cx.globalAlpha = 1;
+  }
+
   for (const b of bits){
     cx.globalAlpha = Math.max(0, b.life);
     cx.fillStyle = b.c;
@@ -804,6 +816,13 @@ function draw(){
       i ? cx.lineTo(q.cx, q.cy) : cx.moveTo(q.cx, q.cy);
     });
     cx.stroke();
+    // 그어지는 끝에 불꽃 하나. 어느 쪽으로 이어지는지가 눈에 확 들어온다.
+    if (ln.grow < 1){
+      const tip = ln.pts[Math.min(ln.pts.length - 1, upto - 1)];
+      const q = tileAt(tip[0], tip[1]);
+      cx.fillStyle = '#ffffff';
+      cx.beginPath(); cx.arc(q.cx, q.cy, Math.min(TW, TH) * 0.10, 0, 6.284); cx.fill();
+    }
     cx.globalAlpha = 1;
   }
 
@@ -912,15 +931,27 @@ function match(a, b, path){
   const gain = Math.round(BASE * m);
   score += gain;
 
-  fx.push({ x: a.x, y: a.y, k: k, life: 1, spin: (Math.random() - .5) * 2.2 });
-  fx.push({ x: b.x, y: b.y, k: k, life: 1, spin: (Math.random() - .5) * 2.2 });
+  fx.push({ x: a.x, y: a.y, k: k, life: 1, spin: (Math.random() - .5) * 2.6 });
+  fx.push({ x: b.x, y: b.y, k: k, life: 1, spin: (Math.random() - .5) * 2.6 });
   lines.push({ pts: path, life: 1, grow: 0 });
+
+  /* 짝 하나 맞추는 것도 이 게임에서는 큰일이다. 판을 비우는 순간만
+     터뜨려 두면 그 사이 스무 번의 '맞췄다' 가 밋밋하게 지나간다.
+
+     다만 이건 일이삼 초마다 일어나니 크게 하되 짧게, 그리고 그 자리
+     에서만 한다. 화면 전체가 매번 번쩍이면 스무 번째쯤엔 피곤해진다. */
   const col = KIND_COLOR[k];
-  for (const t of [a, b]){ const q = tileAt(t.x, t.y); burst(q.cx, q.cy, col, 7); }
+  for (const t of [a, b]){
+    const q = tileAt(t.x, t.y);
+    burst(q.cx, q.cy, col, 11);
+    burst(q.cx, q.cy, '#ffffff', 4);
+    pops.push({ x: q.cx, y: q.cy, c: col, life: 1 });
+  }
+  shake = Math.max(shake, 3);
 
   const mid = tileAt((a.x + b.x) / 2, (a.y + b.y) / 2);
   say(mid.cx, mid.cy, '+' + gain + (m > 1 ? ' ×' + m : ''),
-      m > 1 ? '#ffd85b' : '#8ff0d6', m > 1 ? 21 : 17);
+      m > 1 ? '#ffd85b' : '#8ff0d6', m > 1 ? 23 : 19, true);
   if (COMBO_TIERS.some(t => t.at === combo)){
     say(W/2, H*0.30, combo + '연속 ×' + m, '#ffd85b', 26, true);
     flash = Math.max(flash, .55); shake = Math.max(shake, 7);
@@ -1002,7 +1033,7 @@ function refreshHud(){
 function startGame(){
   score = 0; combo = 0; lastHit = -99; boards = 0;
   left = ROUND; over = false; started = true;
-  fx = []; bits = []; lines = []; texts = []; rings = []; conf = []; tint = null;
+  fx = []; bits = []; lines = []; texts = []; pops = []; rings = []; conf = []; tint = null;
   shake = flash = shuffleT = wrongT = 0; wrongCell = null;
   newBoard();
   $('#startScreen').classList.add('hide');
@@ -1057,6 +1088,7 @@ function tick(t){
     b.vy += 520 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt * 1.9;
     if (b.life <= 0) bits.splice(i, 1);
   }
+  for (let i = pops.length - 1; i >= 0; i--){ pops[i].life -= dt * 3.6; if (pops[i].life <= 0) pops.splice(i,1); }
   for (let i = rings.length - 1; i >= 0; i--){ rings[i].life -= dt * 1.5; if (rings[i].life <= 0) rings.splice(i,1); }
   for (let i = conf.length - 1; i >= 0; i--){
     const c = conf[i];

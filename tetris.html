@@ -315,15 +315,26 @@ let shakeT = 0, shakeMag = 0, groupFx = new Map(), texts = [], levelFlash = 0, b
      garbage  – junk rows dealt at the start of the stage
      rise     – ms between rows pushed up from the floor (0 = none).
                 This is the real pressure: it punishes slow clearing.
-     iRate    – chance the all-purpose I piece survives into the bag        */
+     sztAdd   – 봉지에 더 섞는 S·Z·T 장수 (0~4)
+
+   sztAdd 는 예전에 iRate 였다. 그때는 봉지에서 I 를 아예 빼고 그 자리에
+   S·Z·T 를 넣었는데, 그러면 I 가 언제 올지 아무도 모르게 된다. 재 보니
+   7탄에서 I 없이 일흔여섯 개, 12탄에서는 아흔네 개까지 이어졌다.
+   보통 테트리스는 봉지 방식이라 아무리 안 나와도 열두 개 안에 온다.
+   한 줄 우물을 파 두면 그 사이 못 메우고 죽으니, 어려운 게 아니라
+   운에 맡긴 것이었다.
+
+   그래서 I 는 봉지마다 한 장씩 그대로 두고, 대신 S·Z·T 를 더 섞는다.
+   봉지가 열 장이 되면 I 는 10% 로 줄지만 두 봉지 안에는 반드시 온다 —
+   최대 열여덟 개다. 어려움은 남기고 운은 걷어냈다.                    */
 const STAGES = [
-  {n:1, name:'뒷마당',    at:0    ,     gravity:800, garbage:0, rise:0,     iRate:1.00, tint:'#141626', lite:'#eef0f8', bpm:100, key:0},
-  {n:2, name:'골목길',    at:10   ,  gravity:640, garbage:1, rise:0,     iRate:1.00, tint:'#151a2e', lite:'#e9eff9', bpm:110, key:2},
-  {n:3, name:'지붕 위',   at:22   ,  gravity:500, garbage:2, rise:0,     iRate:0.85, tint:'#1a1630', lite:'#f0ecfa', bpm:120, key:4},
-  {n:4, name:'달빛 정원', at:38   ,  gravity:390, garbage:2, rise:26000, iRate:0.75, tint:'#101c2c', lite:'#e8f1f8', bpm:130, key:5},
-  {n:5, name:'별바다',    at:58   , gravity:300, garbage:3, rise:19000, iRate:0.65, tint:'#0f1830', lite:'#e8eefb', bpm:140, key:7},
-  {n:6, name:'꿈나라',    at:82   , gravity:230, garbage:3, rise:14000, iRate:0.55, tint:'#1c1226', lite:'#f6ecf7', bpm:150, key:9},
-  {n:7, name:'별똥별',    at:110  , gravity:170, garbage:4, rise:10000, iRate:0.45, tint:'#241026', lite:'#fbecf3', bpm:162, key:11},
+  {n:1, name:'뒷마당',    at:0    ,     gravity:800, garbage:0, rise:0,     sztAdd:0, tint:'#141626', lite:'#eef0f8', bpm:100, key:0},
+  {n:2, name:'골목길',    at:10   ,  gravity:640, garbage:1, rise:0,     sztAdd:0, tint:'#151a2e', lite:'#e9eff9', bpm:110, key:2},
+  {n:3, name:'지붕 위',   at:22   ,  gravity:500, garbage:2, rise:0,     sztAdd:1, tint:'#1a1630', lite:'#f0ecfa', bpm:120, key:4},
+  {n:4, name:'달빛 정원', at:38   ,  gravity:390, garbage:2, rise:26000, sztAdd:1, tint:'#101c2c', lite:'#e8f1f8', bpm:130, key:5},
+  {n:5, name:'별바다',    at:58   , gravity:300, garbage:3, rise:19000, sztAdd:2, tint:'#0f1830', lite:'#e8eefb', bpm:140, key:7},
+  {n:6, name:'꿈나라',    at:82   , gravity:230, garbage:3, rise:14000, sztAdd:2, tint:'#1c1226', lite:'#f6ecf7', bpm:150, key:9},
+  {n:7, name:'별똥별',    at:110  , gravity:170, garbage:4, rise:10000, sztAdd:3, tint:'#241026', lite:'#fbecf3', bpm:162, key:11},
 ];
 let stage = STAGES[0], riseTimer = 0;
 
@@ -506,7 +517,7 @@ function stageFor(ln){
     gravity: Math.max(85, last.gravity - extra * 10),
     garbage: Math.min(6, last.garbage + Math.floor(extra / 4)),
     rise: Math.max(4500, last.rise - extra * 600),
-    iRate: Math.max(0.28, last.iRate - extra * 0.015),
+    sztAdd: Math.min(4, last.sztAdd + Math.floor(extra / 5)),
   };
 }
 best = +(localStorage.getItem('cattris_best')||0);
@@ -523,12 +534,11 @@ function emptyGrid(){ return Array.from({length:ROWS}, ()=>Array(COLS).fill(null
 // 7-bag randomizer
 function nextFromBag(){
   if(!bag.length){
+    // 일곱 종류가 한 장씩. 여기에 탄이 오를수록 S·Z·T 를 더 섞는다.
+    // I 를 빼지는 않는다 — 빼면 언제 올지 모르게 되어 버틸 수가 없다.
     bag = TYPES.slice();
-    // later stages sometimes swap the all-purpose I piece for a trickier one,
-    // so you can't just wait for the line-clearer
-    if(stage.iRate < 1 && Math.random() > stage.iRate){
-      const i = bag.indexOf('I');
-      if(i>=0) bag[i] = ['S','Z','T'][(Math.random()*3)|0];
+    for(let i = 0; i < (stage.sztAdd || 0); i++){
+      bag.push(['S','Z','T'][(Math.random()*3)|0]);
     }
     for(let i=bag.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [bag[i],bag[j]]=[bag[j],bag[i]]; }
   }
@@ -862,7 +872,7 @@ function beginStageClear(next){
   if(next.gravity < stage.gravity) diffs.push('낙하 속도 ↑');
   if(next.garbage > 0) diffs.push(`시작 방해줄 ${next.garbage}줄`);
   if(next.rise) diffs.push(`바닥 차오름 ${Math.round(next.rise/1000)}초마다`);
-  if(next.iRate < 1) diffs.push('I 조각 확률 ↓');
+  if(next.sztAdd > 0) diffs.push('S·Z·T 가 더 자주');
   showOverlay(`${stage.n}탄 클리어! 🎉`,
     `${stage.name} 통과 · 점수 ${score} · ${lines}줄`
     + `<div class="nextInfo"><b>다음 — ${next.n}탄 ${next.name}</b>`
