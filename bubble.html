@@ -114,7 +114,7 @@
 </div>
 
 <div class="goal">
-  <span class="st">줄 내려오기 <b id="untilRow">5</b></span>
+  <span class="st">줄 내려오기 <b id="untilRow">8</b><i style="font-style:normal;color:var(--faint)"> / <b id="pace">8</b>발</i></span>
   <span class="bar" id="goalBar"><i id="goalFill"></i></span>
   <span class="num">연속 <b id="combo">0</b></span>
 </div>
@@ -160,19 +160,32 @@ const BOARD_BG = '#151b2e';
 const COLS = 8;
 const COLORS = 5;
 const START_ROWS = 4;
-// 이만큼 쏘면 위에서 한 줄 내려온다.
-//
-// 다섯으로 뒀더니 잘 겨누는 봇도 스물네 발에 끝났다. 한 줄이 일고여덟
-// 개인데 한 번 터뜨려야 셋이 없어지니, 다섯 발마다 줄이 오면 두 발에
-// 한 번씩 터뜨려야 겨우 본전이다. 그건 버티기지 겨루기가 아니다.
-const ADD_EVERY = 8;
+/* 몇 발마다 위에서 한 줄이 내려오나.
+
+   다섯으로 못박아 뒀더니 잘 겨누는 봇도 스물네 발에 끝났다. 한 줄이
+   일고여덟 개인데 한 번 터뜨려야 셋이 없어지니, 다섯 발마다 줄이 오면
+   두 발에 한 번씩 터뜨려야 겨우 본전이다. 그건 버티기지 겨루기가 아니다.
+
+   그래서 여덟로 늘렸는데, 이번엔 반대 구멍이 생겼다. 맨 윗줄을 끊으면
+   판이 통째로 떨어져 비는데, 빈 판에서 끝금까지 차오르려면 열 줄이 와야
+   한다 — 여든 발이다. 그걸 되풀이하면 끝이 안 난다.
+
+   그래서 갈수록 조인다. 여덟에서 시작해 스물네 발마다 하나씩 줄어들고
+   셋에서 멈춘다. 백스무 발쯤이면 세 발마다 줄이 오니, 아무리 잘 쳐도
+   언젠가는 차오른다. 끝나야 점수를 견줄 수 있다. */
+const ADD_FROM = 8, ADD_TO = 3, ADD_STEP = 24;
+const addEvery = () => Math.max(ADD_TO, ADD_FROM - Math.floor(shots / ADD_STEP));
 
 let rows = [];                  // [{odd:bool, cells:[색 또는 null]}]
 let ball = null;                // 날아가는 냥 {x,y,vx,vy,c}
 let nextC = 0, curC = 0;
 let aim = -Math.PI / 2;         // 겨누는 쪽
 let aiming = false;
+// 이번에 손을 댄 동안 실제로 겨눴는지. 발사대 코앞만 툭 치고 떼면
+// 겨눈 적이 없는데도 아까 각으로 나가 버려서, 그 한 발이 억울하다.
+let aimed = false;
 let shots = 0, dropped = 0;
+let untilRow = ADD_FROM;        // 다음 줄까지 몇 발 남았나
 let score = 0, best = 0;
 let combo = 0;
 let over = false, started = false;
@@ -332,7 +345,7 @@ function drawAim(){
   let vx = Math.cos(aim), vy = Math.sin(aim);
   cx.save();
   cx.setLineDash([5, 7]);
-  cx.strokeStyle = 'rgba(255,255,255,.34)';
+  cx.strokeStyle = aiming ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.22)';
   cx.lineWidth = 2;
   cx.beginPath(); cx.moveTo(x, y);
   let bounced = 0, guard = 0;
@@ -537,7 +550,7 @@ function land(){
 function afterShot(hit){
   shots++;
   // 못 터뜨린 발이 쌓이면 줄이 내려온다. 아무렇게나 쏘면 금방 차오른다.
-  if (shots % ADD_EVERY === 0) pushRow();
+  if (--untilRow <= 0){ untilRow = addEvery(); pushRow(); }
   curC = nextC; nextC = pickColor();
   refreshHud();
   checkOver();
@@ -564,18 +577,29 @@ function say(x, y, str, color, size){
 function refreshHud(){
   $('#score').textContent = score.toLocaleString('ko-KR');
   $('#combo').textContent = combo;
-  const until = ADD_EVERY - (shots % ADD_EVERY);
-  $('#untilRow').textContent = until;
-  $('#goalFill').style.width = ((ADD_EVERY - until) / ADD_EVERY * 100) + '%';
+  const per = addEvery();
+  $('#untilRow').textContent = untilRow;
+  $('#goalFill').style.width = ((per - untilRow) / per * 100) + '%';
+  $('#pace').textContent = per;
   bumpChase(score);
 }
 
 /* ---------------- 겨누기 ---------------- */
+/* 앉을 자리를 미리 비춰 주는 걸 넣었다가 뺐다. 어느 칸에 붙을지까지
+   찍어 주면 튕겨서 노리는 맛이 통째로 사라진다 — 겨누는 게 아니라
+   표시를 따라가는 게 된다. 어디에 붙을지는 스스로 가늠하는 몫으로 둔다. */
 function setAim(ev){
   const r = cv.getBoundingClientRect();
   const x = (ev.clientX - r.left) / r.width * W;
   const y = (ev.clientY - r.top) / r.height * H;
-  let a = Math.atan2(y - GUNY, x - W/2);
+
+  // 발사대 코앞을 짚으면 손가락이 1px 만 떨려도 각이 확 돈다. 그 언저리
+  // 에서는 각을 안 바꾼다 — 멀리 짚을수록 곱게 겨눠진다.
+  const dx = x - W/2, dy = y - GUNY;
+  if (Math.hypot(dx, dy) < D * 1.2) return;
+  aimed = true;
+
+  let a = Math.atan2(dy, dx);
   // 위쪽으로만 쏜다. 옆으로 눕히면 영영 안 닿는 발이 나온다.
   const LIM = 0.20;
   if (a > -LIM) a = -LIM;
@@ -585,13 +609,14 @@ function setAim(ev){
 cv.addEventListener('pointerdown', ev => {
   ev.preventDefault();
   if (!started || over || ball) return;
-  aiming = true; setAim(ev);
+  aiming = true; aimed = false; setAim(ev);
 });
 cv.addEventListener('pointermove', ev => { if (aiming) setAim(ev); });
 const release = ev => {
   if (!aiming) return;
   aiming = false;
   if (!started || over || ball) return;
+  if (!aimed) return;            // 코앞만 짚고 뗐다 — 안 쏜다
   const SPD = Math.max(520, D * 13);
   ball = { x: W/2, y: GUNY, vx: Math.cos(aim) * SPD, vy: Math.sin(aim) * SPD, c: curC };
   shootSound();
@@ -605,7 +630,7 @@ function startGame(){
   for (let r = 0; r < START_ROWS; r++) rows.push(newRow(r % 2 === 1, true));
   // 아래로 조금 더 빈 줄을 깔아 둔다. 앉을 자리가 있어야 한다.
   while (TOPY + rows.length * ROWH + R < DEATHY + ROWH * 2) rows.push(newRow(rows.length % 2 === 1, false));
-  score = 0; combo = 0; shots = 0; dropped = 0;
+  score = 0; combo = 0; shots = 0; dropped = 0; untilRow = ADD_FROM;
   ball = null; over = false; started = true;
   pops = []; texts = []; falling = [];
   shake = flash = 0; aim = -Math.PI/2;
