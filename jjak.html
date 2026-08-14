@@ -638,22 +638,42 @@ function drawTile(x, y, k, opt){
   cx.scale(sc, sc);
   cx.translate(-p.cx, -p.cy);
 
-  // 아래 깔린 패는 오른쪽 아래로 조금 비켜 그려서 두께처럼 보이게 한다.
-  const ox = opt.off || 0;
-  cx.translate(ox, ox);
+  /* 겹쳐 있는 걸 어떻게 보일까.
 
-  // 아래 깔린 판때기는 판 바탕색으로 칠한다. 반투명으로 두면 위에 얹힌
-  // 패가 비쳐서 겹인지 아닌지가 더 헷갈렸다.
-  cx.fillStyle = opt.slab ? '#101a22'
-               : opt.on   ? 'rgba(111,227,196,.22)' : 'rgba(255,255,255,.055)';
-  rr(p.cx - w/2, p.cy - h/2, w, h, Math.min(w, h) * 0.24); cx.fill();
-  cx.strokeStyle = opt.slab ? 'rgba(255,255,255,.16)'
-                 : opt.on   ? '#6fe3c4'
-                 : opt.bad  ? '#ff8f8f' : 'rgba(255,255,255,.10)';
+     처음엔 아래 패를 통째로 6px 비켜 그렸다. 그랬더니 겹으로 안 보이고
+     패가 밀린 것처럼 보였다 — 같은 크기 판때기가 나란히 어긋나 있으면
+     눈은 그걸 '두 장' 이 아니라 '한 장이 잘못 놓였다' 로 읽는다.
+
+     이제 둘로 알린다. 하나는 두께 — 아래 깔린 만큼 얇게 테두리만
+     비죽 내민다. 카드를 여러 장 포갠 옆면처럼 보인다. 또 하나는
+     오른쪽 위 귀퉁이의 점 — 아래 몇 장이 더 깔려 있는지 점으로 센다.
+     두께만으로는 두 겹인지 세 겹인지 세기 어렵다. */
+  const R = Math.min(w, h) * 0.24;
+  const depth = opt.depth || 1;
+  for (let i = depth - 1; i >= 1; i--){
+    const d = i * Math.min(TW, TH) * 0.05;
+    cx.fillStyle = '#0e161d';
+    rr(p.cx - w/2 + d, p.cy - h/2 + d, w, h, R); cx.fill();
+    cx.strokeStyle = 'rgba(255,255,255,.13)'; cx.lineWidth = 1; cx.stroke();
+  }
+
+  cx.fillStyle = opt.on ? 'rgba(111,227,196,.22)' : 'rgba(255,255,255,.055)';
+  rr(p.cx - w/2, p.cy - h/2, w, h, R); cx.fill();
+  cx.strokeStyle = opt.on  ? '#6fe3c4'
+                 : opt.bad ? '#ff8f8f' : 'rgba(255,255,255,.10)';
   cx.lineWidth = (opt.on || opt.bad) ? 2.2 : 1;
   cx.stroke();
 
-  if (!opt.slab) drawKind(k, p.cx, p.cy - h * 0.02, Math.min(w, h) * 0.36);
+  drawKind(k, p.cx, p.cy - h * 0.02, Math.min(w, h) * 0.36);
+
+  // 아래 몇 장이 더 있는지 알리는 점
+  for (let i = 0; i < depth - 1; i++){
+    const rd = Math.min(w, h) * 0.048;
+    cx.fillStyle = '#6fe3c4';
+    cx.beginPath();
+    cx.arc(p.cx + w/2 - rd*2 - i*rd*2.7, p.cy - h/2 + rd*2, rd, 0, 6.284);
+    cx.fill();
+  }
   cx.restore();
 }
 
@@ -677,12 +697,7 @@ function draw(){
       if (!st.length) continue;
       const on  = pick && pick.x === x && pick.y === y;
       const bad = wrongCell && wrongCell.x === x && wrongCell.y === y && wrongT > 0;
-      // 아래 깔린 패는 그림 없이 판때기만 비죽 내민다. 그림까지 그리면
-      // 집을 수 없는 패를 집으려 들게 된다.
-      const step = Math.min(TW, TH) * 0.10;
-      for (let i = 0; i < st.length - 1; i++)
-        drawTile(x, y, st[i], { slab: true, off: (st.length - 1 - i) * step });
-      drawTile(x, y, st[st.length - 1], { on: on, bad: bad });
+      drawTile(x, y, st[st.length - 1], { on: on, bad: bad, depth: st.length });
     }
 
   // 사라지는 중인 패
