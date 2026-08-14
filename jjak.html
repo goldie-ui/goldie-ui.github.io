@@ -466,38 +466,93 @@ function layout(){
 const KIND_COLOR = ['#ffd36b','#ff8fc0','#eef3f6','#6fbcff','#5fd482','#b07bff','#ff6a3d',
                    '#f2a007','#ff3d7a','#cfe0ff','#ff3b3b','#3fd6e8'];
 
+/* 고양이 셋. 어두운 판 위에 얹히니 가장자리에 옅은 그늘을 둘러
+   낱낱이 떨어져 보이게 하고, 안쪽 귀와 볼과 눈의 흰 점을 넣었다.
+   숨결 하나 없는 납작한 색면이면 그림이 아니라 표시로 보인다. */
 function catFace(x, y, s, color, mark){
-  cx.fillStyle = color;
-  // 귀
-  cx.beginPath();
-  cx.moveTo(x - s*.62, y - s*.42); cx.lineTo(x - s*.34, y - s*.92); cx.lineTo(x - s*.10, y - s*.52);
-  cx.closePath(); cx.fill();
-  cx.beginPath();
-  cx.moveTo(x + s*.62, y - s*.42); cx.lineTo(x + s*.34, y - s*.92); cx.lineTo(x + s*.10, y - s*.52);
-  cx.closePath(); cx.fill();
+  // 귀 — 끝을 둥글려 뾰족한 느낌을 덜었다
+  cx.fillStyle = color; cx.strokeStyle = color;
+  cx.lineJoin = 'round'; cx.lineWidth = s*.16;
+  for (const sgn of [-1, 1]){
+    cx.beginPath();
+    cx.moveTo(x + sgn*s*.58, y - s*.40);
+    cx.lineTo(x + sgn*s*.34, y - s*.86);
+    cx.lineTo(x + sgn*s*.12, y - s*.50);
+    cx.closePath(); cx.fill(); cx.stroke();
+  }
+  // 안쪽 귀
+  cx.fillStyle = 'rgba(255,255,255,.34)';
+  for (const sgn of [-1, 1]){
+    cx.beginPath();
+    cx.moveTo(x + sgn*s*.48, y - s*.44);
+    cx.lineTo(x + sgn*s*.34, y - s*.70);
+    cx.lineTo(x + sgn*s*.21, y - s*.48);
+    cx.closePath(); cx.fill();
+  }
   // 얼굴
+  cx.fillStyle = color;
   cx.beginPath(); cx.ellipse(x, y, s*.72, s*.62, 0, 0, 6.284); cx.fill();
-  // 눈코
+  // 아래쪽 그늘 — 둥글어 보이게
+  cx.fillStyle = 'rgba(20,14,10,.12)';
+  cx.beginPath(); cx.ellipse(x + s*.06, y + s*.16, s*.62, s*.50, 0, 0, 6.284); cx.fill();
+  cx.fillStyle = color;
+  cx.beginPath(); cx.ellipse(x - s*.04, y - s*.08, s*.62, s*.50, 0, 0, 6.284); cx.fill();
+  // 테두리
+  cx.strokeStyle = 'rgba(20,14,10,.26)'; cx.lineWidth = Math.max(0.8, s*.07);
+  cx.beginPath(); cx.ellipse(x, y, s*.72, s*.62, 0, 0, 6.284); cx.stroke();
+  // 반짝임
+  cx.fillStyle = 'rgba(255,255,255,.34)';
+  cx.beginPath(); cx.ellipse(x - s*.30, y - s*.28, s*.18, s*.11, -0.5, 0, 6.284); cx.fill();
+  // 볼
+  cx.fillStyle = 'rgba(255,120,150,.24)';
+  cx.beginPath(); cx.ellipse(x - s*.44, y + s*.14, s*.13, s*.09, 0, 0, 6.284); cx.fill();
+  cx.beginPath(); cx.ellipse(x + s*.44, y + s*.14, s*.13, s*.09, 0, 0, 6.284); cx.fill();
+  // 눈 — 흰 점이 있어야 살아 있는 눈으로 보인다
+  cx.fillStyle = 'rgba(30,22,18,.86)';
+  cx.beginPath(); cx.ellipse(x - s*.26, y - s*.02, s*.095, s*.135, 0, 0, 6.284); cx.fill();
+  cx.beginPath(); cx.ellipse(x + s*.26, y - s*.02, s*.095, s*.135, 0, 0, 6.284); cx.fill();
+  cx.fillStyle = 'rgba(255,255,255,.85)';
+  cx.beginPath(); cx.arc(x - s*.29, y - s*.07, s*.038, 0, 6.284); cx.fill();
+  cx.beginPath(); cx.arc(x + s*.23, y - s*.07, s*.038, 0, 6.284); cx.fill();
+  // 코와 ω 입
   cx.fillStyle = 'rgba(30,22,18,.82)';
-  cx.beginPath(); cx.ellipse(x - s*.26, y - s*.04, s*.085, s*.12, 0, 0, 6.284); cx.fill();
-  cx.beginPath(); cx.ellipse(x + s*.26, y - s*.04, s*.085, s*.12, 0, 0, 6.284); cx.fill();
   cx.beginPath();
-  cx.moveTo(x - s*.09, y + s*.20); cx.lineTo(x + s*.09, y + s*.20); cx.lineTo(x, y + s*.31);
+  cx.moveTo(x - s*.08, y + s*.19); cx.lineTo(x + s*.08, y + s*.19); cx.lineTo(x, y + s*.29);
   cx.closePath(); cx.fill();
+  cx.strokeStyle = 'rgba(30,22,18,.55)'; cx.lineWidth = Math.max(0.8, s*.045);
+  cx.lineCap = 'round';
+  cx.beginPath();
+  cx.moveTo(x - s*.17, y + s*.29);
+  cx.quadraticCurveTo(x - s*.09, y + s*.41, x, y + s*.30);
+  cx.quadraticCurveTo(x + s*.09, y + s*.41, x + s*.17, y + s*.29);
+  cx.stroke();
   // 무늬 — 색이 비슷해 보일 때 이걸로 가른다
   if (mark === 'stripe'){
-    cx.strokeStyle = 'rgba(40,30,20,.30)'; cx.lineWidth = s*.10; cx.lineCap = 'round';
+    cx.strokeStyle = 'rgba(40,30,20,.32)'; cx.lineWidth = s*.10; cx.lineCap = 'round';
     cx.beginPath();
-    cx.moveTo(x - s*.30, y - s*.44); cx.lineTo(x - s*.14, y - s*.34);
-    cx.moveTo(x + s*.30, y - s*.44); cx.lineTo(x + s*.14, y - s*.34);
+    cx.moveTo(x - s*.30, y - s*.42); cx.lineTo(x - s*.14, y - s*.32);
+    cx.moveTo(x + s*.30, y - s*.42); cx.lineTo(x + s*.14, y - s*.32);
     cx.stroke();
   } else if (mark === 'spot'){
     cx.fillStyle = 'rgba(40,30,20,.20)';
-    cx.beginPath(); cx.ellipse(x - s*.42, y + s*.20, s*.16, s*.13, 0, 0, 6.284); cx.fill();
+    cx.beginPath(); cx.ellipse(x - s*.42, y + s*.18, s*.15, s*.12, 0, 0, 6.284); cx.fill();
   }
 }
 
 function drawKind(k, x, y, s){
+  // 고양이가 아닌 것들은 그린 뒤 테두리를 한 번 둘러 준다. 어두운 판
+  // 위에서 색면만 떠 있으면 윤곽이 뭉개져 보인다.
+  cx.save();
+  if (k >= 3){
+    cx.shadowColor = 'rgba(0,0,0,.45)';
+    cx.shadowBlur = s * 0.22;
+    cx.shadowOffsetY = s * 0.06;
+  }
+  drawKindRaw(k, x, y, s);
+  cx.restore();
+}
+
+function drawKindRaw(k, x, y, s){
   switch (k){
     case 0: catFace(x, y, s, KIND_COLOR[0], 'stripe'); break;
     case 1: catFace(x, y, s, KIND_COLOR[1], null);     break;

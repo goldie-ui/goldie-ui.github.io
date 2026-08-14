@@ -129,7 +129,7 @@
   <canvas id="cv"></canvas>
   <div class="screen" id="startScreen">
     <h2>🫧 뽀글냥</h2>
-    <p>화면을 끌어 <b>겨누고</b> 손을 떼면 쏩니다.<br>
+    <p>화면을 <b>좌우로 끌어</b> 겨누고 손을 떼면 쏩니다.<br>
        같은 냥 <b>셋</b>이 붙으면 터져요.<br>
        매달린 데가 끊긴 냥은 <b>우수수 떨어집니다</b> — 여기가 제일 큽니다.</p>
     <button class="btn" id="startBtn">시작</button>
@@ -142,7 +142,7 @@
 </div>
 
 <p class="hint">
-  끌어서 겨누고 떼면 발사 · 벽에 <b>튕겨서</b> 구석도 노릴 수 있어요<br>
+  좌우로 끌어 겨누고 떼면 발사 · 미는 만큼만 돌아가요 · 벽에 <b>튕겨서</b> 구석도<br>
   터뜨린 것보다 <b>떨어뜨린 것</b>이 네 배 값 · 연달아 터뜨리면 <b>연속 배수</b>
 </p>
 
@@ -181,9 +181,6 @@ let ball = null;                // 날아가는 냥 {x,y,vx,vy,c}
 let nextC = 0, curC = 0;
 let aim = -Math.PI / 2;         // 겨누는 쪽
 let aiming = false;
-// 이번에 손을 댄 동안 실제로 겨눴는지. 발사대 코앞만 툭 치고 떼면
-// 겨눈 적이 없는데도 아까 각으로 나가 버려서, 그 한 발이 억울하다.
-let aimed = false;
 let shots = 0, dropped = 0;
 let untilRow = ADD_FROM;        // 다음 줄까지 몇 발 남았나
 let score = 0, best = 0;
@@ -309,32 +306,82 @@ function layout(){
 }
 
 /* ---------------- 그림 ---------------- */
-const C_COL = ['#ff7a9c','#6fd4ff','#7ee0a8','#ffd166','#c9a7ff'];
+/* 다섯 색. 같은 색끼리 딱 붙어 있는 일이 잦은 게임이라, 색마다 테두리
+   색을 따로 둔다. 테두리가 없으면 같은 색 넷이 한 덩어리로 뭉쳐 보여서
+   몇 개가 붙었는지 세어지지가 않는다. 안쪽 귀와 볼도 색마다 맞춰 둔다. */
+const C_COL  = ['#ff7a9c','#6fd4ff','#7ee0a8','#ffd166','#c9a7ff'];
+const C_RIM  = ['#c94a6d','#3a93bf','#43a373','#c79a2c','#8c68c9'];
+const C_EAR  = ['#ff5c86','#4fbfef','#5ecf90','#f5bd44','#b38df0'];
 
 function catBall(x, y, r, ci, alpha){
   cx.save();
   if (alpha != null) cx.globalAlpha = alpha;
   const col = C_COL[ci];
-  // 귀
+
+  // 귀 — 끝을 둥글려 뾰족한 느낌을 덜었다
   cx.fillStyle = col;
-  cx.beginPath();
-  cx.moveTo(x - r*.66, y - r*.44); cx.lineTo(x - r*.36, y - r*.98); cx.lineTo(x - r*.06, y - r*.56);
-  cx.closePath(); cx.fill();
-  cx.beginPath();
-  cx.moveTo(x + r*.66, y - r*.44); cx.lineTo(x + r*.36, y - r*.98); cx.lineTo(x + r*.06, y - r*.56);
-  cx.closePath(); cx.fill();
+  cx.lineJoin = 'round'; cx.lineWidth = r*.20; cx.strokeStyle = col;
+  for (const sgn of [-1, 1]){
+    cx.beginPath();
+    cx.moveTo(x + sgn*r*.60, y - r*.40);
+    cx.lineTo(x + sgn*r*.36, y - r*.90);
+    cx.lineTo(x + sgn*r*.08, y - r*.52);
+    cx.closePath(); cx.fill(); cx.stroke();
+  }
+  // 안쪽 귀
+  cx.fillStyle = C_EAR[ci];
+  for (const sgn of [-1, 1]){
+    cx.beginPath();
+    cx.moveTo(x + sgn*r*.50, y - r*.44);
+    cx.lineTo(x + sgn*r*.36, y - r*.72);
+    cx.lineTo(x + sgn*r*.20, y - r*.50);
+    cx.closePath(); cx.fill();
+  }
+
   // 얼굴
-  cx.beginPath(); cx.arc(x, y, r * .86, 0, 6.284); cx.fill();
-  // 반짝임 — 동그란 것이 여럿이라 빛나는 자리가 있어야 덩어리로 안 뭉친다
-  cx.fillStyle = 'rgba(255,255,255,.30)';
-  cx.beginPath(); cx.ellipse(x - r*.32, y - r*.36, r*.24, r*.17, -0.5, 0, 6.284); cx.fill();
-  // 눈코
-  cx.fillStyle = 'rgba(28,22,32,.80)';
-  cx.beginPath(); cx.ellipse(x - r*.28, y + r*.02, r*.09, r*.13, 0, 0, 6.284); cx.fill();
-  cx.beginPath(); cx.ellipse(x + r*.28, y + r*.02, r*.09, r*.13, 0, 0, 6.284); cx.fill();
+  cx.fillStyle = col;
+  cx.beginPath(); cx.arc(x, y, r*.86, 0, 6.284); cx.fill();
+  // 아래쪽에 옅은 그늘을 깔아 둥글어 보이게
+  cx.fillStyle = 'rgba(20,14,30,.13)';
+  cx.beginPath(); cx.arc(x + r*.10, y + r*.20, r*.72, 0, 6.284); cx.fill();
+  cx.fillStyle = col;
+  cx.beginPath(); cx.arc(x - r*.06, y - r*.10, r*.70, 0, 6.284); cx.fill();
+
+  // 테두리 — 같은 색끼리 붙어도 낱낱이 세어지게
+  cx.strokeStyle = C_RIM[ci]; cx.lineWidth = Math.max(1, r*.10);
+  cx.beginPath(); cx.arc(x, y, r*.86, 0, 6.284); cx.stroke();
+
+  // 반짝임
+  cx.fillStyle = 'rgba(255,255,255,.42)';
+  cx.beginPath(); cx.ellipse(x - r*.34, y - r*.38, r*.22, r*.15, -0.5, 0, 6.284); cx.fill();
+
+  // 볼
+  cx.fillStyle = 'rgba(255,120,150,.22)';
+  cx.beginPath(); cx.ellipse(x - r*.46, y + r*.20, r*.16, r*.11, 0, 0, 6.284); cx.fill();
+  cx.beginPath(); cx.ellipse(x + r*.46, y + r*.20, r*.16, r*.11, 0, 0, 6.284); cx.fill();
+
+  // 눈 — 흰 점 하나가 들어가야 살아 있는 눈으로 보인다
+  cx.fillStyle = 'rgba(26,20,30,.86)';
+  cx.beginPath(); cx.ellipse(x - r*.28, y + r*.02, r*.10, r*.15, 0, 0, 6.284); cx.fill();
+  cx.beginPath(); cx.ellipse(x + r*.28, y + r*.02, r*.10, r*.15, 0, 0, 6.284); cx.fill();
+  cx.fillStyle = 'rgba(255,255,255,.85)';
+  cx.beginPath(); cx.arc(x - r*.31, y - r*.04, r*.042, 0, 6.284); cx.fill();
+  cx.beginPath(); cx.arc(x + r*.25, y - r*.04, r*.042, 0, 6.284); cx.fill();
+
+  // 코와 입
+  cx.fillStyle = 'rgba(26,20,30,.80)';
   cx.beginPath();
-  cx.moveTo(x - r*.10, y + r*.26); cx.lineTo(x + r*.10, y + r*.26); cx.lineTo(x, y + r*.38);
+  cx.moveTo(x - r*.09, y + r*.25); cx.lineTo(x + r*.09, y + r*.25); cx.lineTo(x, y + r*.36);
   cx.closePath(); cx.fill();
+  // 고양이 입은 ω 다. 코에서 양쪽으로 아래로 봉긋하게 두 번.
+  // 처음엔 가운데를 올리고 끝을 내렸더니 시무룩한 얼굴이 됐다.
+  cx.strokeStyle = 'rgba(26,20,30,.55)'; cx.lineWidth = Math.max(1, r*.05);
+  cx.lineCap = 'round'; cx.lineJoin = 'round';
+  cx.beginPath();
+  cx.moveTo(x - r*.20, y + r*.36);
+  cx.quadraticCurveTo(x - r*.10, y + r*.50, x, y + r*.37);
+  cx.quadraticCurveTo(x + r*.10, y + r*.50, x + r*.20, y + r*.36);
+  cx.stroke();
   cx.restore();
 }
 
@@ -585,21 +632,29 @@ function refreshHud(){
 }
 
 /* ---------------- 겨누기 ---------------- */
-/* 앉을 자리를 미리 비춰 주는 걸 넣었다가 뺐다. 어느 칸에 붙을지까지
+/* 겨누기.
+
+   처음엔 짚은 자리가 곧 방향이었다. 그러면 손가락을 발사대 코앞에
+   두었을 때 1px 만 떨려도 각이 확 돌아서 겨눌 수가 없고, 멀리 두면
+   이번엔 손가락이 노리는 자리를 가린다.
+
+   그래서 끄는 만큼만 돌린다. 손을 댄 자리는 상관없고, 거기서 옆으로
+   민 거리만큼 각이 움직인다. 판 너비를 다 끌면 105° 쯤 도니 한 번에
+   왼쪽 끝에서 오른쪽 끝까지 갈 수 있고, 조금만 밀면 조금만 돈다.
+   각은 쏜 뒤에도 그대로 남아서, 다음 발은 거기서 다시 다듬으면 된다.
+
+   그냥 툭 치고 떼면 지금 겨눈 쪽으로 나간다.
+
+   앉을 자리를 미리 비춰 주는 것도 넣었다가 뺐다. 어느 칸에 붙을지까지
    찍어 주면 튕겨서 노리는 맛이 통째로 사라진다 — 겨누는 게 아니라
-   표시를 따라가는 게 된다. 어디에 붙을지는 스스로 가늠하는 몫으로 둔다. */
+   표시를 따라가는 게 된다. */
+const AIM_SENS = 0.0052;        // 판 위 1px 을 밀 때 도는 각(라디안)
+let dragX = 0, dragAim = 0;
+
 function setAim(ev){
   const r = cv.getBoundingClientRect();
   const x = (ev.clientX - r.left) / r.width * W;
-  const y = (ev.clientY - r.top) / r.height * H;
-
-  // 발사대 코앞을 짚으면 손가락이 1px 만 떨려도 각이 확 돈다. 그 언저리
-  // 에서는 각을 안 바꾼다 — 멀리 짚을수록 곱게 겨눠진다.
-  const dx = x - W/2, dy = y - GUNY;
-  if (Math.hypot(dx, dy) < D * 1.2) return;
-  aimed = true;
-
-  let a = Math.atan2(dy, dx);
+  let a = dragAim + (x - dragX) * AIM_SENS;
   // 위쪽으로만 쏜다. 옆으로 눕히면 영영 안 닿는 발이 나온다.
   const LIM = 0.20;
   if (a > -LIM) a = -LIM;
@@ -609,14 +664,19 @@ function setAim(ev){
 cv.addEventListener('pointerdown', ev => {
   ev.preventDefault();
   if (!started || over || ball) return;
-  aiming = true; aimed = false; setAim(ev);
+  aiming = true;
+  const r = cv.getBoundingClientRect();
+  dragX = (ev.clientX - r.left) / r.width * W;
+  dragAim = aim;
+  // 손이 판 밖으로 나가도 계속 따라오게 붙잡아 둔다. 안 그러면 크게
+  // 돌리려고 끝까지 밀었을 때 거기서 뚝 끊긴다.
+  try { cv.setPointerCapture(ev.pointerId); } catch (e) {}
 });
 cv.addEventListener('pointermove', ev => { if (aiming) setAim(ev); });
 const release = ev => {
   if (!aiming) return;
   aiming = false;
   if (!started || over || ball) return;
-  if (!aimed) return;            // 코앞만 짚고 뗐다 — 안 쏜다
   const SPD = Math.max(520, D * 13);
   ball = { x: W/2, y: GUNY, vx: Math.cos(aim) * SPD, vy: Math.sin(aim) * SPD, c: curC };
   shootSound();
