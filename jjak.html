@@ -218,6 +218,9 @@ let lines = [];           // 이어진 길
 let texts = [];           // 떠오르는 점수
 let bornT = 0;            // 새 판이 살아 들어오는 동안
 let pulse = 0;            // 고른 패가 숨 쉬는 박자
+let rings = [];           // 퍼져 나가는 파문
+let conf = [];            // 흩날리는 색종이
+let tint = null;          // 화면 전체에 도는 빛깔
 let shake = 0, flash = 0;
 let wrongCell = null, wrongT = 0;
 let shuffleT = 0;
@@ -805,16 +808,46 @@ function draw(){
   }
 
   // 떠오르는 점수
+  for (const r of rings){
+    const g = 1 - r.life;
+    cx.globalAlpha = Math.max(0, r.life) * 0.8;
+    cx.strokeStyle = r.c;
+    cx.lineWidth = Math.max(0.5, r.w * r.life);
+    cx.beginPath();
+    cx.arc(r.x, r.y, Math.max(0, g * Math.max(W, H) * 0.75), 0, 6.284);
+    cx.stroke();
+    cx.globalAlpha = 1;
+  }
+
+  for (const c of conf){
+    cx.save();
+    cx.globalAlpha = Math.max(0, Math.min(1, c.life));
+    cx.translate(c.x, c.y); cx.rotate(c.rot);
+    cx.fillStyle = c.c;
+    cx.fillRect(-c.w/2, -c.h/2, c.w, c.h);
+    cx.restore();
+  }
+
   for (const t of texts){
     cx.globalAlpha = Math.max(0, Math.min(1, t.life));
     cx.fillStyle = t.color;
-    cx.font = '900 ' + t.size + 'px "Pretendard",system-ui,sans-serif';
+    // 크게 튀어나왔다 제자리에 앉는다
+    const pop = t.punch ? 1 + Math.max(0, t.life - 0.82) * 3.4 : 1;
+    cx.font = '900 ' + (t.size * pop) + 'px "Pretendard",system-ui,sans-serif';
     cx.textAlign = 'center';
     cx.fillText(t.str, t.x, t.y);
     cx.globalAlpha = 1;
   }
   cx.restore();
 
+  if (tint && tint.life > 0){
+    cx.save();
+    cx.globalAlpha = tint.life * 0.20;
+    cx.globalCompositeOperation = 'lighter';
+    cx.fillStyle = tint.c;
+    cx.fillRect(0, 0, W, H);
+    cx.restore();
+  }
   if (flash > 0){
     cx.fillStyle = 'rgba(255,255,255,' + (flash * 0.16) + ')';
     cx.fillRect(0, 0, W, H);
@@ -889,8 +922,11 @@ function match(a, b, path){
   say(mid.cx, mid.cy, '+' + gain + (m > 1 ? ' ×' + m : ''),
       m > 1 ? '#ffd85b' : '#8ff0d6', m > 1 ? 21 : 17);
   if (COMBO_TIERS.some(t => t.at === combo)){
-    say(W/2, H*0.30, combo + '연속 ×' + m, '#ffd85b', 24);
-    flash = Math.max(flash, .5); shake = Math.max(shake, 5);
+    say(W/2, H*0.30, combo + '연속 ×' + m, '#ffd85b', 26, true);
+    flash = Math.max(flash, .55); shake = Math.max(shake, 7);
+    ring(W/2, H*0.30, '#ffd85b', 7);
+    glow('#ffd85b', 0.9);
+    burst(W/2, H*0.30, '#ffd85b', 14);
   }
   ding(combo);
   refreshHud();
@@ -900,14 +936,41 @@ function match(a, b, path){
     boards++;
     const bonus = 2000 * boards;
     score += bonus;
-    say(W/2, H/2, '판 클리어! +' + bonus.toLocaleString('ko-KR'), '#8ff0d6', 26);
-    flash = 1; shake = 10; fanfare();
+    say(W/2, H/2, '판 클리어! +' + bonus.toLocaleString('ko-KR'), '#8ff0d6', 28, true);
+    flash = 1; shake = 12; fanfare();
+    // 판을 다 비운 건 이 게임에서 제일 큰 일이다. 화면을 통째로 쓴다.
+    ring(W/2, H/2, '#8ff0d6', 9);
+    setTimeout(() => { if (!over) ring(W/2, H/2, '#7ab8ff', 6); }, 130);
+    setTimeout(() => { if (!over) ring(W/2, H/2, '#ffd85b', 4); }, 260);
+    glow('#8ff0d6', 1);
+    confetti(46);
     setTimeout(() => { if (!over) newBoard(); }, 620);
     refreshHud();
     return;
   }
   if (!findAnyMove()) shuffleBoard(false);
 }
+
+/* 큰 순간에 쓰는 것들.
+
+   조각이 튀는 정도로는 '해냈다' 가 안 된다. 연속이 한 칸 오르거나
+   판을 다 비웠을 때는 화면이 통째로 반응해야 한다. 파문이 퍼지고,
+   빛깔이 돌고, 색종이가 흩날리고, 글자가 크게 튀어나왔다 앉는다. */
+function ring(px, py, color, w){
+  rings.push({ x: px, y: py, c: color, life: 1, w: w || 6 });
+}
+function confetti(n, color){
+  for (let i = 0; i < n; i++){
+    conf.push({
+      x: W * Math.random(), y: -10 - Math.random() * H * 0.4,
+      vx: (Math.random() - .5) * 90, vy: 120 + Math.random() * 220,
+      rot: Math.random() * 6.284, spin: (Math.random() - .5) * 9,
+      c: color || KIND_COLOR[(Math.random() * DESIGNS) | 0],
+      w: TW * 0.10, h: TW * 0.17, life: 1,
+    });
+  }
+}
+function glow(color, amt){ tint = { c: color, life: amt || 1 }; }
 
 // 짝이 맞을 때 조각이 튄다. 그냥 사라지기만 하면 없어진 건 알겠는데
 // 없앤 맛이 없다. 손으로 한 일에는 손맛이 따라와야 한다.
@@ -919,8 +982,9 @@ function burst(px, py, color, n){
   }
 }
 
-function say(x, y, str, color, size){
-  texts.push({ x: x, y: y, str: str, color: color, size: size, life: 1, vy: -22 });
+function say(x, y, str, color, size, punch){
+  texts.push({ x: x, y: y, str: str, color: color, size: size, life: 1,
+               vy: punch ? -9 : -22, punch: !!punch });
 }
 
 function refreshHud(){
@@ -938,7 +1002,7 @@ function refreshHud(){
 function startGame(){
   score = 0; combo = 0; lastHit = -99; boards = 0;
   left = ROUND; over = false; started = true;
-  fx = []; bits = []; lines = []; texts = [];
+  fx = []; bits = []; lines = []; texts = []; rings = []; conf = []; tint = null;
   shake = flash = shuffleT = wrongT = 0; wrongCell = null;
   newBoard();
   $('#startScreen').classList.add('hide');
@@ -993,6 +1057,14 @@ function tick(t){
     b.vy += 520 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt * 1.9;
     if (b.life <= 0) bits.splice(i, 1);
   }
+  for (let i = rings.length - 1; i >= 0; i--){ rings[i].life -= dt * 1.5; if (rings[i].life <= 0) rings.splice(i,1); }
+  for (let i = conf.length - 1; i >= 0; i--){
+    const c = conf[i];
+    c.vy += 260 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.rot += c.spin * dt;
+    if (c.y > H + 20) c.life -= dt * 3;
+    if (c.life <= 0) conf.splice(i,1);
+  }
+  if (tint) { tint.life -= dt * 1.1; if (tint.life <= 0) tint = null; }
   pulse += dt;
   if (bornT > 0) bornT = Math.max(0, bornT - dt * 1.5);
   for (let i = texts.length - 1; i >= 0; i--){

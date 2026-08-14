@@ -194,6 +194,9 @@ let pops = [], texts = [], falling = [];
 let bits = [];            // 튀는 조각
 let wobble = [];          // 붙는 순간 흔들리는 자리 {r,c,life,amp}
 let trail = [];           // 날아가는 냥이 남기는 자국
+let rings = [];           // 퍼져 나가는 파문
+let conf = [];            // 흩날리는 색종이
+let tint = null;          // 화면 전체에 도는 빛깔
 let shake = 0, flash = 0;
 let raf = 0, lastT = 0;
 
@@ -491,16 +494,46 @@ function draw(){
   }
   if (ball) catBall(ball.x, ball.y, R, ball.c);
 
+  for (const r of rings){
+    const g = 1 - r.life;
+    cx.globalAlpha = Math.max(0, r.life) * 0.8;
+    cx.strokeStyle = r.c;
+    cx.lineWidth = Math.max(0.5, r.w * r.life);
+    cx.beginPath();
+    cx.arc(r.x, r.y, Math.max(0, g * Math.max(W, H) * 0.7), 0, 6.284);
+    cx.stroke();
+    cx.globalAlpha = 1;
+  }
+
+  for (const c of conf){
+    cx.save();
+    cx.globalAlpha = Math.max(0, Math.min(1, c.life));
+    cx.translate(c.x, c.y); cx.rotate(c.rot);
+    cx.fillStyle = c.c;
+    cx.fillRect(-c.w/2, -c.h/2, c.w, c.h);
+    cx.restore();
+  }
+
   for (const t of texts){
     cx.globalAlpha = Math.max(0, Math.min(1, t.life));
     cx.fillStyle = t.color;
-    cx.font = '900 ' + t.size + 'px "Pretendard",system-ui,sans-serif';
+    // 크게 튀어나왔다 제자리에 앉는다
+    const pop = t.punch ? 1 + Math.max(0, t.life - 0.82) * 3.4 : 1;
+    cx.font = '900 ' + (t.size * pop) + 'px "Pretendard",system-ui,sans-serif';
     cx.textAlign = 'center';
     cx.fillText(t.str, t.x, t.y);
     cx.globalAlpha = 1;
   }
   cx.restore();
 
+  if (tint && tint.life > 0){
+    cx.save();
+    cx.globalAlpha = tint.life * 0.20;
+    cx.globalCompositeOperation = 'lighter';
+    cx.fillStyle = tint.c;
+    cx.fillRect(0, 0, W, H);
+    cx.restore();
+  }
   if (flash > 0){
     cx.fillStyle = 'rgba(255,255,255,' + (flash * 0.15) + ')';
     cx.fillRect(0, 0, W, H);
@@ -613,9 +646,15 @@ function land(){
       gain += Math.round(DROP_PT * fell * m);
       dropped += fell;
       $('#dropped').textContent = dropped;
-      flash = 1; shake = Math.min(14, 5 + fell);
+      flash = 1; shake = Math.min(16, 6 + fell);
       say(W/2, H*0.42, fell + '개 떨어짐! +' + Math.round(DROP_PT * fell * m).toLocaleString('ko-KR'),
-          '#ffd85b', 22);
+          '#ffd85b', 24, true);
+      // 이 게임에서 제일 큰 일이다. 떨어진 수만큼 크게 터뜨린다.
+      ring(W/2, H*0.42, '#ffd85b', 9);
+      setTimeout(() => { if (!over) ring(W/2, H*0.42, '#7cd4ff', 6); }, 130);
+      if (fell >= 8) setTimeout(() => { if (!over) ring(W/2, H*0.42, '#b98cff', 4); }, 260);
+      glow('#ffd85b', 1);
+      confetti(Math.min(60, 14 + fell * 3));
       dropSound();
     } else {
       shake = Math.max(shake, 4);
@@ -626,8 +665,11 @@ function land(){
     say(p0.x, p0.y, '+' + gain.toLocaleString('ko-KR') + (m > 1 ? ' ×' + m : ''),
         m > 1 ? '#ffd85b' : '#9fe4ff', m > 1 ? 20 : 17);
     if (COMBO_TIERS.some(t => t.at === combo)){
-      say(W/2, H*0.30, combo + '연속 ×' + m, '#ffd85b', 24);
-      flash = Math.max(flash, .5);
+      say(W/2, H*0.30, combo + '연속 ×' + m, '#ffd85b', 26, true);
+      flash = Math.max(flash, .55); shake = Math.max(shake, 7);
+      ring(W/2, H*0.30, '#ffd85b', 7);
+      glow('#ffd85b', 0.9);
+      burst(W/2, H*0.30, '#ffd85b', 14);
     }
   } else {
     combo = 0;
@@ -662,6 +704,25 @@ function checkOver(){
       if (rows[r].cells[c] != null && cellPos(r, c).y + R > DEATHY) return endGame();
 }
 
+/* 큰 순간에 쓰는 것들. 조각이 튀는 정도로는 '해냈다' 가 안 된다.
+   매달린 데를 끊어 우수수 떨어뜨리거나 연속이 한 칸 오를 때는 화면이
+   통째로 반응해야 한다. */
+function ring(px, py, color, w){
+  rings.push({ x: px, y: py, c: color, life: 1, w: w || 6 });
+}
+function confetti(n){
+  for (let i = 0; i < n; i++){
+    conf.push({
+      x: W * Math.random(), y: -10 - Math.random() * H * 0.4,
+      vx: (Math.random() - .5) * 90, vy: 120 + Math.random() * 220,
+      rot: Math.random() * 6.284, spin: (Math.random() - .5) * 9,
+      c: C_COL[(Math.random() * C_COL.length) | 0],
+      w: R * 0.20, h: R * 0.34, life: 1,
+    });
+  }
+}
+function glow(color, amt){ tint = { c: color, life: amt || 1 }; }
+
 // 터질 때 조각이 튄다. 고리만 번지고 마니 터뜨린 맛이 없었다.
 function burst(px, py, color, n){
   for (let i = 0; i < n; i++){
@@ -676,8 +737,9 @@ function shakeCell(r, c, amp){
   wobble.push({ r: r, c: c, life: 1, amp: amp });
 }
 
-function say(x, y, str, color, size){
-  texts.push({ x: x, y: y, str: str, color: color, size: size, life: 1, vy: -24 });
+function say(x, y, str, color, size, punch){
+  texts.push({ x: x, y: y, str: str, color: color, size: size, life: 1,
+               vy: punch ? -9 : -24, punch: !!punch });
 }
 
 function refreshHud(){
@@ -752,6 +814,7 @@ function startGame(){
   score = 0; combo = 0; shots = 0; dropped = 0; untilRow = ADD_FROM;
   ball = null; over = false; started = true;
   pops = []; texts = []; falling = []; bits = []; wobble = []; trail = [];
+  rings = []; conf = []; tint = null;
   shake = flash = 0; aim = -Math.PI/2;
   curC = pickColor(); nextC = pickColor();
   $('#dropped').textContent = 0;
@@ -808,6 +871,14 @@ function tick(t){
     trail.push({ x: ball.x, y: ball.y });
     if (trail.length > 7) trail.shift();
   }
+  for (let i = rings.length - 1; i >= 0; i--){ rings[i].life -= dt * 1.5; if (rings[i].life <= 0) rings.splice(i,1); }
+  for (let i = conf.length - 1; i >= 0; i--){
+    const c = conf[i];
+    c.vy += 260 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.rot += c.spin * dt;
+    if (c.y > H + 20) c.life -= dt * 3;
+    if (c.life <= 0) conf.splice(i,1);
+  }
+  if (tint) { tint.life -= dt * 1.1; if (tint.life <= 0) tint = null; }
   for (let i = falling.length - 1; i >= 0; i--){
     const f = falling[i];
     f.vy += 900 * dt; f.y += f.vy * dt; f.x += (f.vx || 0) * dt;
