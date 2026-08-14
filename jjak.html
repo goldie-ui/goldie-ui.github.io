@@ -114,7 +114,7 @@
 </div>
 
 <div class="goal">
-  <span class="st"><b id="boardNo">1</b>판 · <b id="kindNo">6</b>종</span>
+  <span class="st"><b id="boardNo">1</b>판 · <b id="kindNo">5</b>종<span id="layerNo"></span></span>
   <span class="bar" id="goalBar"><i id="goalFill"></i></span>
   <span class="num">연속 <b id="combo">0</b></span>
 </div>
@@ -131,7 +131,8 @@
     <h2>🐾 짝맞추냥</h2>
     <p>같은 그림 둘을 눌러 없애세요.<br>
        잇는 길이 <b>두 번까지만 꺾이면</b> 사라집니다.<br>
-       판을 다 비우면 <b>다음 판</b>, 그림 종류가 하나 늘어요.<br>
+       판을 다 비우면 <b>다음 판</b> — 그림이 늘고, 패가 빽빽해지다가<br>
+       나중엔 <b>겹으로 쌓입니다</b>. 위엣것부터 걷어내세요.<br>
        <b>90초</b> 동안 최대한 많이!</p>
     <button class="btn" id="startBtn">시작</button>
   </div>
@@ -144,7 +145,8 @@
 
 <p class="hint">
   같은 그림 둘을 눌러요 · 길이 <b>두 번까지</b> 꺾이면 이어집니다 · 판 밖으로 돌아가도 됩니다<br>
-  빠르게 이어 맞추면 <b>연속 배수</b> · 판을 다 비우면 <b>큰 보너스</b>와 <b>한 종류 추가</b>
+  빠르게 이어 맞추면 <b>연속 배수</b> · 판을 다 비우면 <b>큰 보너스</b><br>
+  뒤로 갈수록 패가 <b>겹으로</b> 쌓여요. 맨 위 한 장만 집을 수 있습니다
 </p>
 
 <script>
@@ -154,29 +156,53 @@ const cx = cv.getContext('2d', { alpha: false });
 const BOARD_BG = '#16202a';
 
 /* ---------------- 판 ----------------
-   칸은 6 x 6, 늘 열여덟 짝이다. 처음엔 7 x 8(스물여덟 짝)로 뒀는데
-   90초에 판이 두 번밖에 안 넘어갔다. 판이 넘어가는 순간이 이 게임에서
-   제일 기분 좋은 자리라 판을 작게 잘라 자주 넘어가게 했다. 덤으로
-   한 장이 50px 에서 58px 로 커져 손가락에도 낫다.
+   칸은 6 x 6, 서른여섯 자리다. 한 자리에 패를 여러 장 겹쳐 쌓을 수 있고,
+   맨 위 한 장만 집을 수 있다. 아래 깔린 패는 위엣것을 걷어내야 나온다.
+   길도 패가 한 장이라도 남은 자리는 못 지난다.
 
-   판마다 그림 종류를 하나씩 늘린다. 이게 이 게임의 난이도 손잡이다.
-   사천성은 패가 줄수록 쉬워진다 — 재 보니 남은 패가 56장일 때는 아무
-   짝이나 골라 이어질 확률이 11% 인데, 8장 남으면 97% 다. 그래서 한
-   판만 크게 만들어 놓으면 앞부분만 고생스럽고 뒤는 요식이 된다.
+   판마다 이렇게 올라간다.
 
-   종류를 늘리면 같은 그림 짝 자체가 줄어서 고를 수 있는 수가 줄어든다.
-   6종이면 한 종류가 여섯 장이라 볼 짝이 마흔다섯 쌍인데, 10종이면 두
-   장씩이라 스물세 쌍으로 준다. 판이 바뀔 때마다 처음의 막막함이 돌아온다. */
+     1판  여덟 짝  다섯 종  — 서른여섯 자리에 열여섯 장. 휑하다
+     4판  열여덟 짝 여덟 종 — 자리가 꽉 찬다
+     5판  스물두 짝         — 여덟 자리가 두 겹
+     8판  서른여섯 짝       — 서른여섯 자리가 전부 두 겹
+     9판 부터                세 겹으로 올라간다
+
+   손잡이가 셋이다 — 몇 장 깔지, 몇 종류를 쓸지, 몇 겹으로 쌓을지.
+   처음엔 열여덟 짝을 한 겹으로만 깔고 종류만 늘렸는데, 1판부터 자리가
+   꽉 차 있어서 첫 판이 이미 빡빡했다. 헐렁하게 열어 두고 조금씩 조여야
+   '이제 좀 어려워졌네' 하는 자리가 생긴다.
+
+   종류를 늘리는 것도 그대로 둔다. 종류가 늘면 같은 그림 짝 자체가 줄어
+   고를 수 있는 수가 준다. 다섯 종이면 한 장의 짝 후보가 대여섯 장인데
+   열 종이면 두세 장이다. */
 const COLS = 6, ROWS = 6;
-const PAIRS = (COLS * ROWS) / 2;        // 18
-const KIND_MIN = 6, KIND_MAX = 10;
+const CELLS = COLS * ROWS;              // 36
 // 그려 둔 그림은 열둘. 그중 이 판에 쓸 것만 골라 쓴다.
 const DESIGNS = 12;
 const ROUND = 90;
-let kinds = KIND_MIN;                    // 지금 판의 그림 종류 수
-const kindsFor = n => Math.min(KIND_MAX, KIND_MIN + n);
 
-let grid = [];            // grid[y][x] = 종류 번호 또는 null
+const STAGES = [
+  { pairs:  8, kinds: 5 },
+  { pairs: 11, kinds: 6 },
+  { pairs: 14, kinds: 7 },
+  { pairs: 18, kinds: 8 },   // 자리가 꽉 찬다
+  { pairs: 22, kinds: 8 },   // 여기부터 두 겹
+  { pairs: 27, kinds: 9 },
+  { pairs: 32, kinds: 10 },
+  { pairs: 36, kinds: 10 },  // 전부 두 겹
+];
+// 그 뒤로는 여섯 짝씩 더 깔아 세 겹까지 간다. 쉰네 짝이면 서른여섯
+// 자리가 전부 세 겹이라 거기서 멈춘다.
+function stageAt(n){
+  if (n < STAGES.length) return STAGES[n];
+  return { pairs: Math.min(CELLS * 3 / 2, 36 + (n - STAGES.length + 1) * 6), kinds: 10 };
+}
+let kinds = 5, pairsNow = 8, layersNow = 1, boardTiles = 16;
+
+// grid[y][x] 는 그 자리에 쌓인 패다. 아래에서 위 순서로 담고, 맨 뒤가
+// 맨 위 — 집을 수 있는 건 그 한 장뿐이다.
+let grid = [];
 let pick = null;          // 지금 고른 칸 {x,y}
 let score = 0, best = 0;
 let left = ROUND;         // 남은 시간
@@ -239,10 +265,13 @@ const BASE = 100;
    빼고 세면 더 짧은 길을 찾고도 놓치는 짝이 생긴다. */
 const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
 
+const topOf = (x, y) => { const st = grid[y][x]; return st.length ? st[st.length - 1] : null; };
+
 function freeCell(x, y){
   if (x < -1 || y < -1 || x > COLS || y > ROWS) return false;  // 한 칸 밖까지만
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return true;   // 바깥 테두리는 늘 빈 곳
-  return grid[y][x] == null;
+  // 한 장이라도 남아 있으면 길이 못 지난다. 아래 깔린 패도 벽이다.
+  return grid[y][x].length === 0;
 }
 
 // 이어지면 지나온 칸들을 돌려준다. 안 되면 null.
@@ -296,9 +325,12 @@ function connect(ax, ay, bx, by){
 function findAnyMove(){
   const byKind = [];
   for (let k = 0; k < DESIGNS; k++) byKind.push([]);
+  // 맨 위 한 장씩만 본다. 아래 깔린 패는 아직 없는 셈이다.
   for (let y = 0; y < ROWS; y++)
-    for (let x = 0; x < COLS; x++)
-      if (grid[y][x] != null) byKind[grid[y][x]].push([x, y]);
+    for (let x = 0; x < COLS; x++){
+      const k = topOf(x, y);
+      if (k != null) byKind[k].push([x, y]);
+    }
 
   for (const list of byKind)
     for (let i = 0; i < list.length; i++)
@@ -311,44 +343,64 @@ function findAnyMove(){
 function tilesLeft(){
   let n = 0;
   for (let y = 0; y < ROWS; y++)
-    for (let x = 0; x < COLS; x++) if (grid[y][x] != null) n++;
+    for (let x = 0; x < COLS; x++) n += grid[y][x].length;
   return n;
 }
 
 /* ---------------- 새 판 ---------------- */
+function shuffled(a){
+  for (let i = a.length - 1; i > 0; i--){
+    const j = (Math.random() * (i + 1)) | 0;
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// 패를 자리에 흩어 놓는다. 한 겹씩 채우고, 남은 장수가 자리 수보다
+// 적으면 그만큼만 아무 자리에나 놓는다. 그래서 앞 판은 군데군데 비고
+// 뒤 판은 골고루 겹으로 쌓인다.
+function place(bag){
+  grid = [];
+  for (let y = 0; y < ROWS; y++){
+    const row = [];
+    for (let x = 0; x < COLS; x++) row.push([]);
+    grid.push(row);
+  }
+  const cells = [];
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) cells.push([x, y]);
+  let p = 0, deep = 0;
+  while (p < bag.length){
+    shuffled(cells);
+    const n = Math.min(cells.length, bag.length - p);
+    for (let i = 0; i < n; i++){
+      const [x, y] = cells[i];
+      grid[y][x].push(bag[p++]);
+      if (grid[y][x].length > deep) deep = grid[y][x].length;
+    }
+  }
+  layersNow = deep;
+}
+
 function newBoard(){
-  kinds = kindsFor(boards);
+  const st = stageAt(boards);
+  kinds = st.kinds; pairsNow = st.pairs;
 
   // 열둘 중 이 판에 쓸 그림을 골라 둔다. 앞에서부터 순서대로 쓰면
   // 종류가 열까지만 오르니 딸기와 별은 한 번도 안 나온다. 판마다
   // 새로 뽑으면 같은 판수라도 얼굴이 달라서 외운 대로 안 흘러간다.
-  const deck = [];
-  for (let i = 0; i < DESIGNS; i++) deck.push(i);
-  for (let i = deck.length - 1; i > 0; i--){
-    const j = (Math.random() * (i + 1)) | 0;
-    [deck[i], deck[j]] = [deck[j], deck[i]];
-  }
+  const deck = shuffled(Array.from({ length: DESIGNS }, (_, i) => i));
 
-  // 짝 수는 늘 같으니 종류 수로 고르게 나눈다. 딱 안 나눠지면
-  // 앞쪽 종류가 한 짝씩 더 가진다.
+  // 짝을 종류 수로 고르게 나눈다. 딱 안 나눠지면 앞쪽이 한 짝씩 더.
   const bag = [];
-  const per = Math.floor(PAIRS / kinds);
-  let extra = PAIRS - per * kinds;
+  const per = Math.floor(pairsNow / kinds);
+  let extra = pairsNow - per * kinds;
   for (let k = 0; k < kinds; k++){
     const cnt = per + (extra-- > 0 ? 1 : 0);
     for (let i = 0; i < cnt * 2; i++) bag.push(deck[k]);
   }
-  for (let i = bag.length - 1; i > 0; i--){
-    const j = (Math.random() * (i + 1)) | 0;
-    [bag[i], bag[j]] = [bag[j], bag[i]];
-  }
-  grid = [];
-  let p = 0;
-  for (let y = 0; y < ROWS; y++){
-    const row = [];
-    for (let x = 0; x < COLS; x++) row.push(bag[p++]);
-    grid.push(row);
-  }
+  boardTiles = bag.length;
+  shuffled(bag);
+  place(bag);
   pick = null;
   // 처음부터 막힌 판이 나올 수도 있으니 한 번 확인한다.
   if (!findAnyMove()) shuffleBoard(true);
@@ -361,17 +413,12 @@ function shuffleBoard(silent){
   const rest = [];
   for (let y = 0; y < ROWS; y++)
     for (let x = 0; x < COLS; x++)
-      if (grid[y][x] != null) rest.push(grid[y][x]);
+      for (const k of grid[y][x]) rest.push(k);
 
+  // 남은 패를 통째로 다시 흩어 놓는다. 겹이 몇이었든 남은 장수에
+  // 맞춰 다시 쌓이니, 걷어낼수록 저절로 얕아진다.
   for (let tries = 0; tries < 60; tries++){
-    for (let i = rest.length - 1; i > 0; i--){
-      const j = (Math.random() * (i + 1)) | 0;
-      [rest[i], rest[j]] = [rest[j], rest[i]];
-    }
-    let p = 0;
-    for (let y = 0; y < ROWS; y++)
-      for (let x = 0; x < COLS; x++)
-        if (grid[y][x] != null) grid[y][x] = rest[p++];
+    place(shuffled(rest));
     if (findAnyMove()) break;
   }
   pick = null;
@@ -412,8 +459,12 @@ function layout(){
    일곱 가지가 한눈에 갈려야 한다. 색만 다르게 하면 급할 때 헷갈리니
    생김새부터 다르게 그린다 — 고양이 셋은 색과 무늬로, 나머지 넷은
    아예 다른 물건으로. */
-const KIND_COLOR = ['#ffcf6b','#ff9ec8','#e8f0f4','#8fd0ff','#7ee0a8','#c9a7ff','#ffab7a',
-                   '#f5c542','#ff7aa2','#dfe9ff','#ff5f5f','#a6f0e0'];
+// 열둘이 한눈에 갈려야 한다. 색만으로는 모자라서 생김새부터 다르게
+// 그리되, 비슷한 자리에 있는 것끼리는 색도 최대한 벌려 놓는다.
+// 방울과 털실이 둘 다 동그랗고 색까지 가까워서 제일 헷갈렸다 —
+// 방울은 종 모양으로 바꾸고 털실은 풀린 실을 달았다.
+const KIND_COLOR = ['#ffd36b','#ff8fc0','#eef3f6','#6fbcff','#5fd482','#b07bff','#ff6a3d',
+                   '#f2a007','#ff3d7a','#cfe0ff','#ff3b3b','#3fd6e8'];
 
 function catFace(x, y, s, color, mark){
   cx.fillStyle = color;
@@ -480,22 +531,33 @@ function drawKind(k, x, y, s){
     }
     case 6: {                                   // 털실
       cx.fillStyle = KIND_COLOR[6];
-      cx.beginPath(); cx.arc(x, y, s*.58, 0, 6.284); cx.fill();
-      cx.strokeStyle = 'rgba(70,35,20,.32)'; cx.lineWidth = s*.09; cx.lineCap = 'round';
+      cx.beginPath(); cx.arc(x, y - s*.10, s*.56, 0, 6.284); cx.fill();
+      cx.strokeStyle = 'rgba(80,25,5,.42)'; cx.lineWidth = s*.13; cx.lineCap = 'round';
+      cx.beginPath(); cx.ellipse(x, y - s*.10, s*.54, s*.22,  0.6, 0, 6.284); cx.stroke();
+      cx.beginPath(); cx.ellipse(x, y - s*.10, s*.54, s*.22, -0.6, 0, 6.284); cx.stroke();
+      // 풀려 나온 실 한 가닥 — 이게 있어야 공이 아니라 털실로 보인다
+      cx.strokeStyle = KIND_COLOR[6]; cx.lineWidth = s*.12;
       cx.beginPath();
-      cx.ellipse(x, y, s*.56, s*.26, 0.5, 0, 6.284);
-      cx.ellipse(x, y, s*.56, s*.26, -0.5, 0, 6.284);
+      cx.moveTo(x + s*.48, y + s*.24);
+      cx.quadraticCurveTo(x + s*.92, y + s*.54, x + s*.46, y + s*.78);
       cx.stroke();
       break;
     }
     case 7: {                                   // 방울
-      cx.fillStyle = KIND_COLOR[7];
-      cx.beginPath(); cx.arc(x, y - s*.06, s*.54, 0, 6.284); cx.fill();
-      cx.fillStyle = 'rgba(70,45,5,.42)';
-      rr(x - s*.34, y - s*.02, s*.68, s*.13, s*.06); cx.fill();
-      cx.beginPath(); cx.arc(x, y + s*.30, s*.12, 0, 6.284); cx.fill();
-      cx.fillStyle = 'rgba(255,255,255,.42)';
-      cx.beginPath(); cx.arc(x - s*.20, y - s*.28, s*.11, 0, 6.284); cx.fill();
+      const C = KIND_COLOR[7];
+      // 고리
+      cx.strokeStyle = C; cx.lineWidth = s*.13;
+      cx.beginPath(); cx.arc(x, y - s*.62, s*.17, Math.PI, 0); cx.stroke();
+      // 위는 둥글고 아래로 퍼지는 종
+      cx.fillStyle = C;
+      cx.beginPath();
+      cx.moveTo(x - s*.60, y + s*.34);
+      cx.quadraticCurveTo(x - s*.50, y - s*.50, x, y - s*.54);
+      cx.quadraticCurveTo(x + s*.50, y - s*.50, x + s*.60, y + s*.34);
+      cx.closePath(); cx.fill();
+      rr(x - s*.68, y + s*.30, s*1.36, s*.19, s*.09); cx.fill();
+      // 추
+      cx.beginPath(); cx.arc(x, y + s*.62, s*.14, 0, 6.284); cx.fill();
       break;
     }
     case 8: {                                   // 리본
@@ -576,14 +638,22 @@ function drawTile(x, y, k, opt){
   cx.scale(sc, sc);
   cx.translate(-p.cx, -p.cy);
 
-  cx.fillStyle = opt.on ? 'rgba(111,227,196,.22)' : 'rgba(255,255,255,.055)';
+  // 아래 깔린 패는 오른쪽 아래로 조금 비켜 그려서 두께처럼 보이게 한다.
+  const ox = opt.off || 0;
+  cx.translate(ox, ox);
+
+  // 아래 깔린 판때기는 판 바탕색으로 칠한다. 반투명으로 두면 위에 얹힌
+  // 패가 비쳐서 겹인지 아닌지가 더 헷갈렸다.
+  cx.fillStyle = opt.slab ? '#101a22'
+               : opt.on   ? 'rgba(111,227,196,.22)' : 'rgba(255,255,255,.055)';
   rr(p.cx - w/2, p.cy - h/2, w, h, Math.min(w, h) * 0.24); cx.fill();
-  cx.strokeStyle = opt.on ? '#6fe3c4'
-                 : opt.bad ? '#ff8f8f' : 'rgba(255,255,255,.10)';
-  cx.lineWidth = opt.on || opt.bad ? 2.2 : 1;
+  cx.strokeStyle = opt.slab ? 'rgba(255,255,255,.16)'
+                 : opt.on   ? '#6fe3c4'
+                 : opt.bad  ? '#ff8f8f' : 'rgba(255,255,255,.10)';
+  cx.lineWidth = (opt.on || opt.bad) ? 2.2 : 1;
   cx.stroke();
 
-  drawKind(k, p.cx, p.cy - h * 0.02, Math.min(w, h) * 0.36);
+  if (!opt.slab) drawKind(k, p.cx, p.cy - h * 0.02, Math.min(w, h) * 0.36);
   cx.restore();
 }
 
@@ -603,11 +673,16 @@ function draw(){
 
   for (let y = 0; y < ROWS; y++)
     for (let x = 0; x < COLS; x++){
-      const k = grid[y][x];
-      if (k == null) continue;
-      const on = pick && pick.x === x && pick.y === y;
+      const st = grid[y][x];
+      if (!st.length) continue;
+      const on  = pick && pick.x === x && pick.y === y;
       const bad = wrongCell && wrongCell.x === x && wrongCell.y === y && wrongT > 0;
-      drawTile(x, y, k, { on: on, bad: bad });
+      // 아래 깔린 패는 그림 없이 판때기만 비죽 내민다. 그림까지 그리면
+      // 집을 수 없는 패를 집으려 들게 된다.
+      const step = Math.min(TW, TH) * 0.10;
+      for (let i = 0; i < st.length - 1; i++)
+        drawTile(x, y, st[i], { slab: true, off: (st.length - 1 - i) * step });
+      drawTile(x, y, st[st.length - 1], { on: on, bad: bad });
     }
 
   // 사라지는 중인 패
@@ -670,13 +745,13 @@ cv.addEventListener('pointerdown', ev => {
   ev.preventDefault();
   if (!started || over) return;
   const c = cellFrom(ev);
-  if (!c || grid[c.y][c.x] == null) return;
+  if (!c || topOf(c.x, c.y) == null) return;
 
   if (pick && pick.x === c.x && pick.y === c.y){ pick = null; return; }
 
   if (!pick){ pick = c; blip(620); return; }
 
-  if (grid[pick.y][pick.x] !== grid[c.y][c.x]){
+  if (topOf(pick.x, pick.y) !== topOf(c.x, c.y)){
     // 다른 그림이면 그냥 새로 고른 것으로 친다. 여기서 벌을 주면
     // 눌러 보며 익히는 사람이 손해를 본다.
     pick = c; blip(620); return;
@@ -692,9 +767,9 @@ cv.addEventListener('pointerdown', ev => {
 });
 
 function match(a, b, path){
-  const k = grid[a.y][a.x];
-  grid[a.y][a.x] = null;
-  grid[b.y][b.x] = null;
+  const k = topOf(a.x, a.y);
+  grid[a.y][a.x].pop();
+  grid[b.y][b.x].pop();
   pick = null;
 
   const now = performance.now() / 1000;
@@ -741,9 +816,10 @@ function refreshHud(){
   $('#score').textContent = score.toLocaleString('ko-KR');
   $('#boardNo').textContent = boards + 1;
   $('#kindNo').textContent  = kinds;
+  $('#layerNo').textContent = layersNow > 1 ? ' · ' + layersNow + '겹' : '';
   $('#combo').textContent = combo;
-  const total = COLS * ROWS;
-  $('#goalFill').style.width = ((total - tilesLeft()) / total * 100) + '%';
+  $('#goalFill').style.width =
+    (boardTiles ? (boardTiles - tilesLeft()) / boardTiles * 100 : 0) + '%';
   bumpChase(score);
 }
 
